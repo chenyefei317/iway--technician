@@ -53,7 +53,7 @@ with st.sidebar:
 # ================= 3. 主界面逻辑 =================
 st.title("👨‍🔧 员工安全与职业健康签收平台")
 st.markdown(
-    "请查阅下方 Word 版本的【职业危害告知书】与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。"
+    "请查阅下方 Word 版本的【职业危害告知书】（区分公司与上岗前/在岗期间）与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。"
 )
 
 # 基础信息录入
@@ -67,19 +67,19 @@ with col2:
 st.write("---")
 st.markdown("### 📂 待签收项目清单（Word文档版）")
 
-# --- 项目一：职业危害告知书（读取“职业危害告知书”文件夹中的 .docx 文件） ---
+# --- 项目一：职业危害告知书（公司 + 上岗前/在岗期间） ---
 st.subheader("⚠️ 项目一：职业危害告知书")
-hazard_options = [
-    "职业危害告知书 - 大连宜家",
-    "职业危害告知书 - 福建双翼",
-    "职业危害告知书 - 福建龙竹",
-    "职业危害告知书 - 安徽恒林",
-    "职业危害告知书 - 东莞时兴",
-]
-hazard_version = st.selectbox(
-    "请选择【职业危害告知书】对应版本/站点：", hazard_options
-)
 
+col_c, col_s = st.columns(2)
+with col_c:
+  company_choice = st.selectbox(
+      "选择公司/站点：",
+      ["安徽恒林", "大连宜家", "东莞时兴", "福建龙竹", "福建双翼"],
+  )
+with col_s:
+  stage_choice = st.selectbox("选择告知阶段：", ["上岗前", "在岗期间"])
+
+hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
 hazard_filename = f"{hazard_version}.docx"
 hazard_path = os.path.join(hazard_folder, hazard_filename)
@@ -89,11 +89,11 @@ try:
     hazard_docx_data = f.read()
   file_ready_1 = True
 except FileNotFoundError:
-  # 如果尚未上传对应 docx，提供提示字节
   doc_temp = Document()
   doc_temp.add_heading(hazard_version, level=1)
   doc_temp.add_paragraph(
-      "提示：尚未在 GitHub 的 '职业危害告知书' 文件夹中上传此 .docx 模板文件。"
+      f"提示：未在 '{hazard_folder}' 文件夹中找到 '{hazard_filename}'"
+      " 文件，请确认已上传至 GitHub。"
   )
   temp_io = io.BytesIO()
   doc_temp.save(temp_io)
@@ -115,7 +115,7 @@ c_hazard = st.checkbox(
 
 st.write("---")
 
-# --- 项目二：员工转岗安全与职业健康培训记录表（读取对应文件夹中的 .docx 文件） ---
+# --- 项目二：员工转岗安全与职业健康培训记录表 ---
 st.subheader("🎓 项目二：员工转岗安全与职业健康培训记录表")
 training_folder = "员工转岗安全与职业健康培训记录表"
 training_filename = "员工转岗安全与职业健康培训记录表.docx"
@@ -129,8 +129,8 @@ except FileNotFoundError:
   doc_temp2 = Document()
   doc_temp2.add_heading("员工转岗安全与职业健康培训记录表", level=1)
   doc_temp2.add_paragraph(
-      "提示：尚未在 GitHub 的 '员工转岗安全与职业健康培训记录表' 文件夹中上传"
-      " .docx 模板文件。"
+      "提示：未在 '员工转岗安全与职业健康培训记录表' 文件夹中找到"
+      " '员工转岗安全与职业健康培训记录表.docx' 文件。"
   )
   temp_io2 = io.BytesIO()
   doc_temp2.save(temp_io2)
