@@ -33,36 +33,60 @@ hide_streamlit_style = """
     """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
+
+# 智能模糊查找 .docx 文件通用函数
+def find_docx_file(folder, keyword1, keyword2):
+  if not os.path.exists(folder):
+    return None
+  for filename in os.listdir(folder):
+    if (
+        keyword1 in filename
+        and keyword2 in filename
+        and filename.lower().endswith(".docx")
+    ):
+      return os.path.join(folder, filename)
+  return None
+
+
 # ================= 2. 侧边栏：Logo、微信分享与模板下载 =================
 with st.sidebar:
   try:
-    st.image("logo.png", width=130)
+    st.image("logo.png", width=160)  # Logo 放大
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
-        width=130,
+        width=160,
     )
 
   st.markdown("### 📱 微信扫码与分享")
-  st.write("请使用微信扫描下方二维码，在手机端完成填报与签收。")
+  st.write(
+      "修改下方 URL 为您的云端实际网址，二维码将自动更新供手机扫码填报。"
+  )
 
-  # 修正后的公网链接输入框（可根据 Streamlit Cloud 实际分配的网址修改）
+  # 应用公网链接输入框（用户可直接在网页端修改以更新二维码）
   app_url = st.text_input(
       "应用公网链接 (URL):",
       value="https://huirui-ehs-sign.streamlit.app",
+      help=(
+          "请在此处粘贴部署到 Streamlit Cloud 后的真实网址，二维码会随之改变"
+      ),
   )
 
   if app_url:
     qr = qrcode.make(app_url)
     img_buffer = io.BytesIO()
     qr.save(img_buffer, format="PNG")
-    st.image(Image.open(img_buffer), caption="微信扫码快速填报通道", width=150)
+    st.image(
+        Image.open(img_buffer), caption="微信扫码快速填报通道", width=160
+    )
     st.info(
-        "💡 **微信分享提示**：点击右上角转发或复制上方链接发送至微信工作群。"
+        "💡 **提示**：将上方链接复制并发送至微信工作群，员工即可手机端签收。"
     )
 
   st.markdown("---")
   st.markdown("### 📥 常用制度模板快捷下载")
+
+  # 1. 转岗培训记录表模板下载
   training_folder_dl = "员工转岗安全与职业健康培训记录表"
   training_path_dl = os.path.join(
       training_folder_dl, "员工转岗安全与职业健康培训记录表.docx"
@@ -74,18 +98,41 @@ with st.sidebar:
           data=ft.read(),
           file_name="员工转岗安全与职业健康培训记录表.docx",
       )
-  else:
-    st.write("（转岗培训表模板待上传）")
 
-# ================= 3. 主界面逻辑（Logo 放在标题左边） =================
-col_logo, col_title = st.columns([1, 5])
+  # 2. 新增：侧边栏职业危害告知书下拉下载选项
+  st.write("**职业危害告知书下载：**")
+  side_company = st.selectbox(
+      "选择公司：",
+      ["安徽恒林", "大连宜家", "东莞时兴", "福建龙竹", "福建双翼"],
+      key="side_comp",
+  )
+  side_stage = st.selectbox(
+      "选择阶段：", ["上岗前", "在岗期间"], key="side_stage"
+  )
+
+  side_hazard_path = find_docx_file(
+      "职业危害告知书", side_company, side_stage
+  )
+  if side_hazard_path and os.path.exists(side_hazard_path):
+    with open(side_hazard_path, "rb") as fsh:
+      st.download_button(
+          label=f"📥 下载选中的告知书",
+          data=fsh.read(),
+          file_name=f"职业危害告知书 - {side_company}（{side_stage}）.docx",
+          key="side_dl_hazard_btn",
+      )
+  else:
+    st.warning("⚠️ 暂未找到该模板")
+
+# ================= 3. 主界面逻辑（Logo 变大并放在标题左边） =================
+col_logo, col_title = st.columns([1, 4])
 with col_logo:
   try:
-    st.image("logo.png", width=100)
+    st.image("logo.png", width=130)  # 主页面 Logo 调大合适尺寸
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
-        width=100,
+        width=130,
     )
 with col_title:
   st.markdown(
@@ -125,21 +172,6 @@ with col_s:
 hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
 
-
-# 智能模糊查找 .docx 文件
-def find_docx_file(folder, keyword1, keyword2):
-  if not os.path.exists(folder):
-    return None
-  for filename in os.listdir(folder):
-    if (
-        keyword1 in filename
-        and keyword2 in filename
-        and filename.lower().endswith(".docx")
-    ):
-      return os.path.join(folder, filename)
-  return None
-
-
 hazard_path = find_docx_file(hazard_folder, company_choice, stage_choice)
 
 try:
@@ -173,7 +205,7 @@ c_hazard = st.checkbox(
     f"【须确认】本人已阅读并充分了解《{hazard_version}》的相关职业危害与防护要求，承诺在工作中严格落实。"
 )
 
-# 新增：索性把所有危害告知书放上去供员工自由下载的折叠专区
+# 附加查阅：全套《职业危害告知书》模板快捷下载折叠区
 with st.expander("📚 附加查阅：全套《职业危害告知书》模板快捷下载专区"):
   st.write(
       "如需查阅或下载其他公司/阶段的职业危害告知书，可直接点击下方按钮："
@@ -245,7 +277,7 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# 手写签名板块（签字栏大幅放大）
+# 手写签名板块（签字栏已按要求大幅放大）
 st.write("---")
 st.subheader("✍️ 3. 员工手写签名与提交")
 st.markdown(
@@ -256,8 +288,8 @@ canvas_result = st_canvas(
     stroke_width=4,
     stroke_color="#000000",
     background_color="#F8F9FA",
-    height=260,  # 进一步加大高度
-    width=650,  # 进一步加大宽度
+    height=260,  # 高度保持大尺寸
+    width=650,  # 宽度保持大尺寸
     drawing_mode="freedraw",
     key="canvas",
     return_image_data=True,
