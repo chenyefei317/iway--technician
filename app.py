@@ -58,14 +58,13 @@ with st.sidebar:
   if os.path.exists(hazard_folder_check):
     files_h = os.listdir(hazard_folder_check)
     st.success(f"【{hazard_folder_check}】文件夹已找到")
-    st.write("检测到的文件：", files_h)
+    st.write("云端检测到的文件：", files_h)
   else:
     st.error(f"❌ 未找到【{hazard_folder_check}】文件夹！请检查 GitHub 目录。")
 
   if os.path.exists(training_folder_check):
     files_t = os.listdir(training_folder_check)
     st.success(f"【{training_folder_check}】文件夹已找到")
-    st.write("检测到的文件：", files_t)
   else:
     st.error(f"❌ 未找到【{training_folder_check}】文件夹！")
 
@@ -86,7 +85,7 @@ with col2:
 st.write("---")
 st.markdown("### 📂 待签收项目清单（Word文档版）")
 
-# --- 项目一：职业危害告知书（宽松模糊匹配） ---
+# --- 项目一：职业危害告知书（超级模糊匹配） ---
 st.subheader("⚠️ 项目一：职业危害告知书")
 
 col_c, col_s = st.columns(2)
@@ -102,22 +101,21 @@ hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
 
 
-# 超级宽松的匹配逻辑：只要文件名同时包含公司名和阶段关键词，且以 .docx 结尾即可
-def find_docx_file_loose(folder, keyword1, keyword2):
+# 超级智能模糊查找：只要文件名里同时包含“公司名字”和“阶段关键词（上岗前/在岗期间）”，且后缀是 docx 就认出来
+def find_docx_file_super_loose(folder, keyword1, keyword2):
   if not os.path.exists(folder):
     return None
   for filename in os.listdir(folder):
-    # 去除空格和括号干扰进行包含判断
-    if (
-        keyword1 in filename
-        and keyword2 in filename
-        and filename.lower().endswith(".docx")
-    ):
-      return os.path.join(folder, filename)
+    if filename.lower().endswith(".docx"):
+      # 检查文件名是否同时包含公司名和阶段名（忽略括号和空格）
+      if keyword1 in filename and keyword2 in filename:
+        return os.path.join(folder, filename)
   return None
 
 
-hazard_path = find_docx_file_loose(hazard_folder, company_choice, stage_choice)
+hazard_path = find_docx_file_super_loose(
+    hazard_folder, company_choice, stage_choice
+)
 
 try:
   if hazard_path and os.path.exists(hazard_path):
@@ -129,9 +127,8 @@ except FileNotFoundError:
   doc_temp = Document()
   doc_temp.add_heading(hazard_version, level=1)
   doc_temp.add_paragraph(
-      f"【系统提示】在 '{hazard_folder}' 文件夹中未找到匹配的 '.docx'"
-      " 文件。\n请查看左侧边栏的“服务器文件状态诊断”，确认文件是否成功上传且后缀为"
-      " .docx。"
+      f"【系统提示】在 '{hazard_folder}' 文件夹中未找到匹配的 '{company_choice}'"
+      f" 与 '{stage_choice}' 的 .docx 文件。\n请查看左侧边栏的“服务器文件状态诊断”，核对云端文件名。"
   )
   temp_io = io.BytesIO()
   doc_temp.save(temp_io)
