@@ -15,7 +15,7 @@ from streamlit_drawable_canvas import st_canvas
 
 # ================= 1. 页面配置与初始化 =================
 st.set_page_config(
-    page_title="慧瑞环保涂料签收平台",
+    page_title="员工职业危害告知书和转岗培训记录表签收平台",
     layout="centered",
     initial_sidebar_state="expanded",
 )
@@ -121,8 +121,8 @@ with st.sidebar:
   else:
     st.warning("⚠️ 暂未找到该模板")
 
-# ================= 3. 主界面逻辑（公司名字和Logo一行，主标题单独一行） =================
-col_logo, col_name = st.columns([1, 6])
+# ================= 3. 主界面逻辑（Logo在左，主标题单独一行） =================
+col_logo, col_title = st.columns([1, 6])
 with col_logo:
   try:
     st.image("logo.png", width=65)
@@ -131,10 +131,8 @@ with col_logo:
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
         width=65,
     )
-with col_name:
-  st.markdown("### 慧瑞环保涂料")
-
-st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
+with col_title:
+  st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
 
 st.markdown(
     "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收。系统将自动把您的亲笔签名嵌入对应的 Word 正式档案中。"
@@ -274,7 +272,7 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# 手写签名板块（已移除括号内说明文字）
+# 手写签名板块
 st.write("---")
 st.subheader("✍️ 3. 员工手写签名与提交")
 st.markdown("**请在下方手写板内签名：**")
@@ -331,7 +329,7 @@ if st.button(
     sig_io.seek(0)
 
 
-    # 安全加载模板并追加签名的核心函数（强制华文宋体）
+    # 安全加载模板并追加签名的核心函数（紧凑排版，确保同一页显示，强制华文宋体）
     def append_signature_to_docx(template_path, default_title):
       if template_path and os.path.exists(template_path):
         try:
@@ -351,25 +349,33 @@ if st.button(
           r.font.name = "华文宋体"
           r.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      doc.add_paragraph("\n")
-      doc.add_paragraph(
+      # 紧凑排版：减小上下边距，确保和正文留在同一页
+      p_line = doc.add_paragraph(
           "--------------------------------------------------"
       )
+      p_line.paragraph_format.space_before = Pt(2)
+      p_line.paragraph_format.space_after = Pt(2)
 
       p_confirm = doc.add_paragraph()
+      p_confirm.paragraph_format.space_before = Pt(0)
+      p_confirm.paragraph_format.space_after = Pt(2)
       run_c = p_confirm.add_run(
-          f"【员工签收确认】\n员工姓名：{emp_name}    身份证号：{emp_id}    "
-          f"签收日期：{sign_date}\n本人已仔细阅读并充分理解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
+          f"【员工签收确认】 姓名：{emp_name} | 身份证号：{emp_id} | 日期：{sign_date}\n"
+          f"本人已仔细阅读并充分理解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
       )
       run_c.font.name = "华文宋体"
+      run_c.font.size = Pt(10.5)
       run_c.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
       p_sig_label = doc.add_paragraph()
+      p_sig_label.paragraph_format.space_before = Pt(0)
+      p_sig_label.paragraph_format.space_after = Pt(2)
       run_s = p_sig_label.add_run("员工本人手写亲笔签名：")
       run_s.font.name = "华文宋体"
+      run_s.font.size = Pt(10.5)
       run_s.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      doc.add_picture(sig_io, width=Inches(2.8))
+      doc.add_picture(sig_io, width=Inches(1.8))
       sig_io.seek(0)
 
       buffer = io.BytesIO()
@@ -431,7 +437,7 @@ if st.button(
       st.download_button(
           label="📥 一键打包下载全部 (.ZIP)",
           data=zip_buffer,
-          file_name=f"慧瑞环保涂料签收档案_{emp_name}_{sign_date}.zip",
+          file_name=f"安全合规档案_{emp_name}_{sign_date}.zip",
           mime="application/zip",
       )
 
