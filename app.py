@@ -59,14 +59,12 @@ with st.sidebar:
     )
 
   st.markdown("### 📱 微信扫码与分享")
-  st.write(
-      "修改下方 URL 为您的云端实际网址，二维码将自动更新供手机扫码填报。"
-  )
+  st.write("已自动关联您的云端网址，二维码将实时更新供手机扫码填报。")
 
-  # 应用公网链接输入框（用户可直接在网页端修改以更新二维码）
+  # 默认公网链接已更新为您的正式网址
   app_url = st.text_input(
       "应用公网链接 (URL):",
-      value="https://huirui-ehs-sign.streamlit.app",
+      value="https://iway--technician.streamlit.app",
       help=(
           "请在此处粘贴部署到 Streamlit Cloud 后的真实网址，二维码会随之改变"
       ),
@@ -99,7 +97,7 @@ with st.sidebar:
           file_name="员工转岗安全与职业健康培训记录表.docx",
       )
 
-  # 2. 新增：侧边栏职业危害告知书下拉下载选项
+  # 2. 侧边栏职业危害告知书下拉下载选项
   st.write("**职业危害告知书下载：**")
   side_company = st.selectbox(
       "选择公司：",
