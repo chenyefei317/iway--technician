@@ -1,6 +1,7 @@
 import datetime
 import io
 import os
+import re
 import zipfile
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -14,7 +15,7 @@ from streamlit_drawable_canvas import st_canvas
 
 # ================= 1. 页面配置与初始化 =================
 st.set_page_config(
-    page_title="员工安全与职业健康签收平台",
+    page_title="慧瑞环保涂料签收平台",
     layout="centered",
     initial_sidebar_state="expanded",
 )
@@ -29,49 +30,46 @@ hide_streamlit_style = """
     """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# ================= 2. 侧边栏：扫码通道与服务器文件检测 =================
+# ================= 2. 侧边栏：Logo、微信分享与下载 =================
 with st.sidebar:
-  st.header("📱 手机端/网页端扫码填报")
-  st.write("请使用手机扫描下方二维码，直接在手机端完成 Word 材料查阅与签收。")
+  # 加载慧瑞 Logo (优先读取本地 logo.png)
+  try:
+    st.image("logo.png", width=140)
+  except Exception:
+    st.image(
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
+        width=140,
+    )
 
-  app_url = "https://your-transfer-training.streamlit.app/"  # 部署后替换为您的云端链接
+  st.markdown("### 📱 手机扫码与微信分享")
+  st.write("请使用微信扫描下方二维码或复制链接，在手机端完成签收。")
 
-  qr = qrcode.QRCode(
-      version=1,
-      error_correction=qrcode.constants.ERROR_CORRECT_M,
-      box_size=6,
-      border=2,
+  app_url = st.text_input(
+      "应用公网链接 (URL):",
+      value="https://huirui-ehs-sign.streamlit.app/",
   )
-  qr.add_data(app_url)
-  qr.make(fit=True)
-  qr_img = qr.make_image(fill_color="black", back_color="white")
 
-  buf = io.BytesIO()
-  qr_img.save(buf, format="PNG")
-  st.image(buf.getvalue(), caption="手机扫码快速签收通道")
+  if app_url:
+    qr = qrcode.make(app_url)
+    img_buffer = io.BytesIO()
+    qr.save(img_buffer, format="PNG")
+    st.image(Image.open(img_buffer), caption="微信扫码快速填报", width=160)
+    st.info(
+        "💡 **微信分享提示**：点击右上角微信转发或复制上方链接发送至微信工作群即可。"
+    )
 
   st.markdown("---")
-  st.subheader("🔍 服务器文件状态诊断")
-  hazard_folder_check = "职业危害告知书"
-  training_folder_check = "员工转岗安全与职业健康培训记录表"
-
-  if os.path.exists(hazard_folder_check):
-    files_h = os.listdir(hazard_folder_check)
-    st.success(f"【{hazard_folder_check}】文件夹已找到")
-    st.write("云端检测到的文件：", files_h)
-  else:
-    st.error(f"❌ 未找到【{hazard_folder_check}】文件夹！请检查 GitHub 目录。")
-
-  if os.path.exists(training_folder_check):
-    files_t = os.listdir(training_folder_check)
-    st.success(f"【{training_folder_check}】文件夹已找到")
-  else:
-    st.error(f"❌ 未找到【{training_folder_check}】文件夹！")
+  st.markdown("### 📥 必备合规模板下载")
+  st.download_button(
+      label="📄 下载员工转岗培训记录表模板",
+      data=b"Mock template",
+      file_name="员工转岗安全与职业健康培训记录表.docx",
+  )
 
 # ================= 3. 主界面逻辑 =================
-st.title("👨‍🔧 员工安全与职业健康签收平台")
+st.title("慧瑞环保涂料 - 员工职业危害告知书和转岗培训记录表签收平台")
 st.markdown(
-    "请查阅下方 Word 版本的【职业危害告知书】与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。"
+    "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收。系统将自动把您的亲笔签名嵌入对应的 Word 正式档案中。"
 )
 
 # 基础信息录入
@@ -80,12 +78,15 @@ col1, col2 = st.columns(2)
 with col1:
   emp_name = st.text_input("员工姓名 (必填)：")
 with col2:
-  emp_id = st.text_input("工号/身份证号 (必填)：")
+  emp_id = st.text_input(
+      "身份证号 / 工号 (必填，须满18位)：",
+      help="请输入标准的 18 位中国居民身份证号码",
+  )
 
 st.write("---")
-st.markdown("### 📂 待签收项目清单（Word文档版）")
+st.markdown("### 📂 待签收项目清单")
 
-# --- 项目一：职业危害告知书（超级模糊匹配） ---
+# --- 项目一：职业危害告知书（精准匹配 .docx 模板） ---
 st.subheader("⚠️ 项目一：职业危害告知书")
 
 col_c, col_s = st.columns(2)
@@ -101,21 +102,21 @@ hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
 
 
-# 超级智能模糊查找：只要文件名里同时包含“公司名字”和“阶段关键词（上岗前/在岗期间）”，且后缀是 docx 就认出来
-def find_docx_file_super_loose(folder, keyword1, keyword2):
+# 智能模糊查找 .docx 文件
+def find_docx_file(folder, keyword1, keyword2):
   if not os.path.exists(folder):
     return None
   for filename in os.listdir(folder):
-    if filename.lower().endswith(".docx"):
-      # 检查文件名是否同时包含公司名和阶段名（忽略括号和空格）
-      if keyword1 in filename and keyword2 in filename:
-        return os.path.join(folder, filename)
+    if (
+        keyword1 in filename
+        and keyword2 in filename
+        and filename.lower().endswith(".docx")
+    ):
+      return os.path.join(folder, filename)
   return None
 
 
-hazard_path = find_docx_file_super_loose(
-    hazard_folder, company_choice, stage_choice
-)
+hazard_path = find_docx_file(hazard_folder, company_choice, stage_choice)
 
 try:
   if hazard_path and os.path.exists(hazard_path):
@@ -127,8 +128,8 @@ except FileNotFoundError:
   doc_temp = Document()
   doc_temp.add_heading(hazard_version, level=1)
   doc_temp.add_paragraph(
-      f"【系统提示】在 '{hazard_folder}' 文件夹中未找到匹配的 '{company_choice}'"
-      f" 与 '{stage_choice}' 的 .docx 文件。\n请查看左侧边栏的“服务器文件状态诊断”，核对云端文件名。"
+      f"【系统提示】在 '{hazard_folder}' 文件夹中未找到匹配的 '.docx'"
+      " 文件，请确认已上传至 GitHub。"
   )
   temp_io = io.BytesIO()
   doc_temp.save(temp_io)
@@ -199,19 +200,19 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# 手写签名板块
+# 手写签名板块（签字栏放大）
 st.write("---")
 st.subheader("✍️ 3. 员工手写签名与提交")
 st.markdown(
-    "**请在下方空白处手写签名（签名与基本信息将自动嵌入并“盖章”到下载的"
-    " Word 模板正文最下方）：**"
+    "**请在下方手写板内签名（放大画板，方便书写；提交后将自动嵌入 Word"
+    " 模板正文最下方）：**"
 )
 canvas_result = st_canvas(
-    stroke_width=3,
+    stroke_width=4,
     stroke_color="#000000",
-    background_color="#F0F2F6",
-    height=150,
-    width=400,
+    background_color="#F8F9FA",
+    height=220,  # 放大高度
+    width=500,  # 放大宽度
     drawing_mode="freedraw",
     key="canvas",
     return_image_data=True,
@@ -228,8 +229,15 @@ if st.button(
       and len(canvas_result.json_data.get("objects", [])) == 0
   )
 
+  # 身份证 18 位强制校验正则
+  id_pattern = re.compile(r"^\d{17}[\dXx]$")
+
   if not emp_name.strip() or not emp_id.strip():
     st.error("❌ 拦截：请完整填写【员工姓名】与【工号/身份证号】！")
+  elif not id_pattern.match(emp_id.strip()):
+    st.error(
+        "❌ 拦截：身份证号必须为严格的 **18 位**数字（末尾可为大写 X）！"
+    )
   elif not c_hazard:
     st.error("❌ 拦截：您必须勾选确认已阅读《职业危害告知书》！")
   elif not c_training:
@@ -260,15 +268,11 @@ if st.button(
         except Exception:
           doc = Document()
           doc.add_heading(default_title, level=1)
-          doc.add_paragraph(
-              "（提示：模板文件损坏或格式非标准 docx，此为系统生成的标准确认单）"
-          )
+          doc.add_paragraph("（提示：模板文件读取异常，此为生成的标准确认单）")
       else:
         doc = Document()
         doc.add_heading(default_title, level=1)
-        doc.add_paragraph(
-            "（提示：未找到对应 .docx 模板文件，请检查左侧诊断面板）"
-        )
+        doc.add_paragraph("（提示：未找到对应的 .docx 模板文件）")
 
       doc.add_paragraph("\n")
       doc.add_paragraph(
@@ -288,7 +292,7 @@ if st.button(
       run_s.font.name = "华文宋体"
       run_s.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      doc.add_picture(sig_io, width=Inches(2.2))
+      doc.add_picture(sig_io, width=Inches(2.5))
       sig_io.seek(0)
 
       buffer = io.BytesIO()
@@ -350,8 +354,17 @@ if st.button(
       st.download_button(
           label="📥 一键打包下载全部 (.ZIP)",
           data=zip_buffer,
-          file_name=f"员工安全与职业健康全套档案_{emp_name}_{sign_date}.zip",
+          file_name=f"慧瑞环保涂料签收档案_{emp_name}_{sign_date}.zip",
           mime="application/zip",
       )
 
     st.balloons()
+
+# ================= 5. 底部版权与开发者声明 =================
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: gray; font-size: 14px;'>"
+    "内部使用，严禁商业用途 | 开发者：陈野菲 Yefei"
+    "</div>",
+    unsafe_allow_html=True,
+)
