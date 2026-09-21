@@ -3,8 +3,9 @@ import io
 import os
 import zipfile
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
-from docx.shared import RGBColor, Pt
+from docx.shared import Inches, RGBColor, Pt
 import pandas as pd
 import qrcode
 from PIL import Image
@@ -31,7 +32,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # ================= 2. 侧边栏：扫码通道 =================
 with st.sidebar:
   st.header("📱 手机端/网页端扫码填报")
-  st.write("请使用手机扫描下方二维码，直接在手机端完成材料查阅与签收。")
+  st.write("请使用手机扫描下方二维码，直接在手机端完成 Word 材料查阅与签收。")
 
   app_url = "https://your-transfer-training.streamlit.app/"  # 部署后替换为您的云端链接
 
@@ -52,7 +53,7 @@ with st.sidebar:
 # ================= 3. 主界面逻辑 =================
 st.title("👨‍🔧 员工安全与职业健康签收平台")
 st.markdown(
-    "请仔细阅读下方【职业危害告知书】与【员工转岗安全与职业健康培训记录表】各项内容，勾选确认并在底部完成手写签收。"
+    "请查阅下方 Word 版本的【职业危害告知书】与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。"
 )
 
 # 基础信息录入
@@ -64,9 +65,9 @@ with col2:
   emp_id = st.text_input("工号/身份证号 (必填)：")
 
 st.write("---")
-st.markdown("### 📂 待签收项目清单")
+st.markdown("### 📂 待签收项目清单（Word文档版）")
 
-# --- 项目一：职业危害告知书（从“职业危害告知书”文件夹读取真实文件） ---
+# --- 项目一：职业危害告知书（读取“职业危害告知书”文件夹中的 .docx 文件） ---
 st.subheader("⚠️ 项目一：职业危害告知书")
 hazard_options = [
     "职业危害告知书 - 大连宜家",
@@ -79,29 +80,34 @@ hazard_version = st.selectbox(
     "请选择【职业危害告知书】对应版本/站点：", hazard_options
 )
 
-# 动态拼接文件夹路径与文件名
 hazard_folder = "职业危害告知书"
-hazard_filename = f"{hazard_version}.pdf"
+hazard_filename = f"{hazard_version}.docx"
 hazard_path = os.path.join(hazard_folder, hazard_filename)
 
-# 尝试读取真实的 PDF 文件
 try:
   with open(hazard_path, "rb") as f:
-    hazard_pdf_data = f.read()
+    hazard_docx_data = f.read()
   file_ready_1 = True
 except FileNotFoundError:
-  hazard_pdf_data = (
-      f"提示：未在 '{hazard_folder}' 文件夹中找到 '{hazard_filename}'"
-      " 文件，请确认已上传至 GitHub。"
-  ).encode("utf-8")
+  # 如果尚未上传对应 docx，提供提示字节
+  doc_temp = Document()
+  doc_temp.add_heading(hazard_version, level=1)
+  doc_temp.add_paragraph(
+      "提示：尚未在 GitHub 的 '职业危害告知书' 文件夹中上传此 .docx 模板文件。"
+  )
+  temp_io = io.BytesIO()
+  doc_temp.save(temp_io)
+  hazard_docx_data = temp_io.getvalue()
   file_ready_1 = False
 
 st.info(f"您当前查阅的是：【{hazard_version}】。")
 st.download_button(
-    label=f"📥 下载《{hazard_version}.pdf》",
-    data=hazard_pdf_data,
+    label=f"📥 下载《{hazard_version}.docx》",
+    data=hazard_docx_data,
     file_name=hazard_filename,
-    mime="application/pdf",
+    mime=(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
 )
 c_hazard = st.checkbox(
     f"【须确认】本人已阅读并充分了解《{hazard_version}》的相关职业危害与防护要求，承诺在工作中严格落实。"
@@ -109,29 +115,36 @@ c_hazard = st.checkbox(
 
 st.write("---")
 
-# --- 项目二：员工转岗安全与职业健康培训记录表（从对应文件夹读取真实文件） ---
+# --- 项目二：员工转岗安全与职业健康培训记录表（读取对应文件夹中的 .docx 文件） ---
 st.subheader("🎓 项目二：员工转岗安全与职业健康培训记录表")
 training_folder = "员工转岗安全与职业健康培训记录表"
-training_filename = "员工转岗安全与职业健康培训记录表.pdf"
+training_filename = "员工转岗安全与职业健康培训记录表.docx"
 training_path = os.path.join(training_folder, training_filename)
 
 try:
   with open(training_path, "rb") as f:
-    training_pdf_data = f.read()
+    training_docx_data = f.read()
   file_ready_2 = True
 except FileNotFoundError:
-  training_pdf_data = (
-      f"提示：未在 '{training_folder}' 文件夹中找到 '{training_filename}'"
-      " 文件，请确认已上传至 GitHub。"
-  ).encode("utf-8")
+  doc_temp2 = Document()
+  doc_temp2.add_heading("员工转岗安全与职业健康培训记录表", level=1)
+  doc_temp2.add_paragraph(
+      "提示：尚未在 GitHub 的 '员工转岗安全与职业健康培训记录表' 文件夹中上传"
+      " .docx 模板文件。"
+  )
+  temp_io2 = io.BytesIO()
+  doc_temp2.save(temp_io2)
+  training_docx_data = temp_io2.getvalue()
   file_ready_2 = False
 
-st.markdown("请查阅以下唯一的标准培训记录表文件：")
+st.markdown("请查阅以下标准培训记录表文件：")
 st.download_button(
-    label="📥 下载《员工转岗安全与职业健康培训记录表.pdf》",
-    data=training_pdf_data,
+    label="📥 下载《员工转岗安全与职业健康培训记录表.docx》",
+    data=training_docx_data,
     file_name=training_filename,
-    mime="application/pdf",
+    mime=(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
 )
 c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
@@ -141,7 +154,8 @@ c_training = st.checkbox(
 st.write("---")
 st.subheader("✍️ 3. 员工手写签名与提交")
 st.markdown(
-    "**请在下方空白处手写签名（签名将自动嵌入生成的 Word 告知书与培训表中）：**"
+    "**请在下方空白处手写签名（签名与基本信息将自动嵌入并“盖章”到下载的"
+    " Word 文档中）：**"
 )
 canvas_result = st_canvas(
     stroke_width=3,
@@ -156,9 +170,9 @@ canvas_result = st_canvas(
 
 sign_date = st.date_input("签收日期：", datetime.date.today())
 
-# ================= 4. 提交校验与生成导出（带自动嵌入签名逻辑） =================
+# ================= 4. 提交校验与生成带签名的 Word 归档 =================
 if st.button(
-    "📁 确认无误，一键签收并生成带签名的归档文件", use_container_width=True
+    "📁 确认无误，一键签收并生成带签名的 Word 档案", use_container_width=True
 ):
   is_canvas_empty = canvas_result.image_data is None or (
       canvas_result.json_data is not None
@@ -177,7 +191,7 @@ if st.button(
     st.warning("⚠️ 拦截：请在上方画板完成手写签名后再提交。")
   else:
     st.success(
-        "✅ 签收成功！系统已将您的手写签名成功嵌入 Word 文档，请打包下载。"
+        "✅ 签收成功！系统已将您的手写签名成功追加并嵌入到 Word 文档末尾。"
     )
 
     # 提取手写签名图片并转存为内存二进制流
@@ -189,42 +203,44 @@ if st.button(
     sig_io.seek(0)
 
 
-    # 辅助函数：生成带签名的 Word 文档
-    def create_signed_word(doc_title, content_text):
-      doc = Document()
-      style = doc.styles["Normal"]
-      style.font.name = "华文宋体"
-      style.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
+    # 核心函数：读取真实 Word 模板并在末尾追加签名
+    def append_signature_to_docx(template_path, default_title):
+      if os.path.exists(template_path):
+        doc = Document(template_path)
+      else:
+        doc = Document()
+        doc.add_heading(default_title, level=1)
+        doc.add_paragraph("（注：未找到对应模板，此为自动生成的标准确认单）")
 
-      h1 = doc.add_heading(level=1)
-      run_h1 = h1.add_run(doc_title)
-      run_h1.bold = True
-      run_h1.font.name = "华文宋体"
-      run_h1.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
+      # 设置统一字体
+      for p in doc.paragraphs:
+        for r in p.runs:
+          if not r.font.name:
+            r.font.name = "华文宋体"
+            r.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      p_info = doc.add_paragraph()
-      run_info = p_info.add_run(
-          f"员工姓名：{emp_name}    工号/身份证：{emp_id}    签收日期：{sign_date}"
+      # 在文末追加签收确认信息与手写签名图片
+      doc.add_paragraph("\n")
+      doc.add_paragraph(
+          "--------------------------------------------------"
       )
-      run_info.font.name = "华文宋体"
-      run_info.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      doc.add_paragraph("--------------------------------------------------")
-
-      p_content = doc.add_paragraph()
-      run_c = p_content.add_run(content_text)
+      p_confirm = doc.add_paragraph()
+      run_c = p_confirm.add_run(
+          f"【员工签收确认】\n员工姓名：{emp_name}    工号/身份证：{emp_id}    "
+          f"签收日期：{sign_date}\n本人已仔细阅读并充分理解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
+      )
       run_c.font.name = "华文宋体"
       run_c.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      doc.add_paragraph("\n")
-
-      p_sig = doc.add_paragraph()
-      run_s = p_sig.add_run("员工本人手写签名确认：\n")
+      p_sig_label = doc.add_paragraph()
+      run_s = p_sig_label.add_run("员工本人手写亲笔签名：")
       run_s.font.name = "华文宋体"
       run_s.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
+      # 将签名图片直接插入 Word 文档
       doc.add_picture(sig_io, width=Inches(2.2))
-      sig_io.seek(0)
+      sig_io.seek(0)  # 重置指针
 
       buffer = io.BytesIO()
       doc.save(buffer)
@@ -232,36 +248,26 @@ if st.button(
       return buffer
 
 
-    # 生成带签名的职业危害告知书 Word
-    hazard_text = (
-        f"本人（{emp_name}，工号：{emp_id}）已仔细阅读并充分了解【{hazard_version}】的相关职业危害与防护要求。"
-        "明确知晓工作场所中存在的有害因素及其对健康的潜在影响，承诺在日常作业中严格遵守各项 EHS 安全操作规程，"
-        "并按规定正确佩戴和使用个人劳动防护用品（PPE）。"
-    )
-    doc_hazard_buffer = create_signed_word(
-        f"{hazard_version} 签收确认单", hazard_text
+    # 1. 生成带签名的职业危害告知书 Word
+    signed_hazard_buffer = append_signature_to_docx(
+        hazard_path, f"{hazard_version} 签收单"
     )
 
-    # 生成带签名的转岗培训记录表 Word
-    training_text = (
-        f"本人（{emp_name}，工号：{emp_id}）已正式完成《员工转岗安全与职业健康培训记录表》所含的全部课程学习。"
-        "已全面熟知新岗位/新区域的重大危险源、应急救援措施、消防安全及环保职业健康管理要求，"
-        "经考核合格，具备上岗操作资格。"
-    )
-    doc_training_buffer = create_signed_word(
-        "员工转岗安全与职业健康培训记录表（签收确认）", training_text
+    # 2. 生成带签名的转岗培训记录表 Word
+    signed_training_buffer = append_signature_to_docx(
+        training_path, "员工转岗安全与职业健康培训记录表 签收单"
     )
 
-    # ZIP 打包下载流
+    # 3. ZIP 打包下载流
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
       zip_file.writestr(
           f"{hazard_version}_{emp_name}_已签字.docx",
-          doc_hazard_buffer.getvalue(),
+          signed_hazard_buffer.getvalue(),
       )
       zip_file.writestr(
           f"员工转岗安全与职业健康培训记录表_{emp_name}_已签字.docx",
-          doc_training_buffer.getvalue(),
+          signed_training_buffer.getvalue(),
       )
       img_byte_arr = io.BytesIO()
       signature_img.save(img_byte_arr, format="PNG")
@@ -272,13 +278,15 @@ if st.button(
     zip_buffer.seek(0)
 
     st.markdown("---")
-    st.success("🎉 您的专属带签名合规档案已打包完毕，点击下方按钮即可下载！")
+    st.success(
+        "🎉 您的专属带签名 Word 合规档案已打包完毕，点击下方按钮即可下载！"
+    )
 
     col_d1, col_d2, col_d3 = st.columns(3)
     with col_d1:
       st.download_button(
-          label="📄 下载带签名的告知书",
-          data=doc_hazard_buffer,
+          label="📄 下载带签名的告知书 (.docx)",
+          data=signed_hazard_buffer,
           file_name=f"{hazard_version}_{emp_name}_已签字.docx",
           mime=(
               "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -286,8 +294,8 @@ if st.button(
       )
     with col_d2:
       st.download_button(
-          label="📄 下载带签名的培训表",
-          data=doc_training_buffer,
+          label="📄 下载带签名的培训表 (.docx)",
+          data=signed_training_buffer,
           file_name=f"员工转岗培训记录表_{emp_name}_已签字.docx",
           mime=(
               "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -295,7 +303,7 @@ if st.button(
       )
     with col_d3:
       st.download_button(
-          label="📥 一键打包下载全部 (ZIP)",
+          label="📥 一键打包下载全部 (.ZIP)",
           data=zip_buffer,
           file_name=f"员工安全与职业健康全套档案_{emp_name}_{sign_date}.zip",
           mime="application/zip",
