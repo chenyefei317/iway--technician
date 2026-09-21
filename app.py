@@ -20,54 +20,78 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 隐藏默认元素
+# 注入华文宋体全局样式与隐藏默认元素
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    html, body, [class*="css"] {
+        font-family: "华文宋体", SimSun, serif;
+    }
     </style>
     """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# ================= 2. 侧边栏：Logo、微信分享与下载 =================
+# ================= 2. 侧边栏：Logo、微信分享与模板下载 =================
 with st.sidebar:
-  # 加载慧瑞 Logo (优先读取本地 logo.png)
   try:
-    st.image("logo.png", width=140)
+    st.image("logo.png", width=130)
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
-        width=140,
+        width=130,
     )
 
-  st.markdown("### 📱 手机扫码与微信分享")
-  st.write("请使用微信扫描下方二维码或复制链接，在手机端完成签收。")
+  st.markdown("### 📱 微信扫码与分享")
+  st.write("请使用微信扫描下方二维码，在手机端完成填报与签收。")
 
+  # 修正后的公网链接输入框（可根据 Streamlit Cloud 实际分配的网址修改）
   app_url = st.text_input(
       "应用公网链接 (URL):",
-      value="https://huirui-ehs-sign.streamlit.app/",
+      value="https://huirui-ehs-sign.streamlit.app",
   )
 
   if app_url:
     qr = qrcode.make(app_url)
     img_buffer = io.BytesIO()
     qr.save(img_buffer, format="PNG")
-    st.image(Image.open(img_buffer), caption="微信扫码快速填报", width=160)
+    st.image(Image.open(img_buffer), caption="微信扫码快速填报通道", width=150)
     st.info(
-        "💡 **微信分享提示**：点击右上角微信转发或复制上方链接发送至微信工作群即可。"
+        "💡 **微信分享提示**：点击右上角转发或复制上方链接发送至微信工作群。"
     )
 
   st.markdown("---")
-  st.markdown("### 📥 必备合规模板下载")
-  st.download_button(
-      label="📄 下载员工转岗培训记录表模板",
-      data=b"Mock template",
-      file_name="员工转岗安全与职业健康培训记录表.docx",
+  st.markdown("### 📥 常用制度模板快捷下载")
+  training_folder_dl = "员工转岗安全与职业健康培训记录表"
+  training_path_dl = os.path.join(
+      training_folder_dl, "员工转岗安全与职业健康培训记录表.docx"
+  )
+  if os.path.exists(training_path_dl):
+    with open(training_path_dl, "rb") as ft:
+      st.download_button(
+          label="📄 转岗培训记录表模板",
+          data=ft.read(),
+          file_name="员工转岗安全与职业健康培训记录表.docx",
+      )
+  else:
+    st.write("（转岗培训表模板待上传）")
+
+# ================= 3. 主界面逻辑（Logo 放在标题左边） =================
+col_logo, col_title = st.columns([1, 5])
+with col_logo:
+  try:
+    st.image("logo.png", width=100)
+  except Exception:
+    st.image(
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
+        width=100,
+    )
+with col_title:
+  st.markdown(
+      "### 慧瑞环保涂料\n## 员工职业危害告知书和转岗培训记录表签收平台"
   )
 
-# ================= 3. 主界面逻辑 =================
-st.title("慧瑞环保涂料 - 员工职业危害告知书和转岗培训记录表签收平台")
 st.markdown(
     "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收。系统将自动把您的亲笔签名嵌入对应的 Word 正式档案中。"
 )
@@ -149,6 +173,27 @@ c_hazard = st.checkbox(
     f"【须确认】本人已阅读并充分了解《{hazard_version}》的相关职业危害与防护要求，承诺在工作中严格落实。"
 )
 
+# 新增：索性把所有危害告知书放上去供员工自由下载的折叠专区
+with st.expander("📚 附加查阅：全套《职业危害告知书》模板快捷下载专区"):
+  st.write(
+      "如需查阅或下载其他公司/阶段的职业危害告知书，可直接点击下方按钮："
+  )
+  if os.path.exists(hazard_folder):
+    all_hazard_files = [
+        f for f in os.listdir(hazard_folder) if f.lower().endswith(".docx")
+    ]
+    for hf in all_hazard_files:
+      full_hf_path = os.path.join(hazard_folder, hf)
+      with open(full_hf_path, "rb") as fh:
+        st.download_button(
+            label=f"📥 下载：{hf}",
+            data=fh.read(),
+            file_name=hf,
+            key=f"dl_all_{hf}",
+        )
+  else:
+    st.write("暂无其他告知书文件。")
+
 st.write("---")
 
 # --- 项目二：员工转岗安全与职业健康培训记录表 ---
@@ -200,19 +245,19 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# 手写签名板块（签字栏放大）
+# 手写签名板块（签字栏大幅放大）
 st.write("---")
 st.subheader("✍️ 3. 员工手写签名与提交")
 st.markdown(
-    "**请在下方手写板内签名（放大画板，方便书写；提交后将自动嵌入 Word"
+    "**请在下方手写板内签名（画板已放大，方便轻松书写；提交后将自动嵌入 Word"
     " 模板正文最下方）：**"
 )
 canvas_result = st_canvas(
     stroke_width=4,
     stroke_color="#000000",
     background_color="#F8F9FA",
-    height=220,  # 放大高度
-    width=500,  # 放大宽度
+    height=260,  # 进一步加大高度
+    width=650,  # 进一步加大宽度
     drawing_mode="freedraw",
     key="canvas",
     return_image_data=True,
@@ -260,7 +305,7 @@ if st.button(
     sig_io.seek(0)
 
 
-    # 安全加载模板并追加签名的核心函数
+    # 安全加载模板并追加签名的核心函数（强制华文宋体）
     def append_signature_to_docx(template_path, default_title):
       if template_path and os.path.exists(template_path):
         try:
@@ -273,6 +318,12 @@ if st.button(
         doc = Document()
         doc.add_heading(default_title, level=1)
         doc.add_paragraph("（提示：未找到对应的 .docx 模板文件）")
+
+      # 统一设置华文宋体
+      for p in doc.paragraphs:
+        for r in p.runs:
+          r.font.name = "华文宋体"
+          r.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
       doc.add_paragraph("\n")
       doc.add_paragraph(
@@ -292,7 +343,7 @@ if st.button(
       run_s.font.name = "华文宋体"
       run_s.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      doc.add_picture(sig_io, width=Inches(2.5))
+      doc.add_picture(sig_io, width=Inches(2.8))
       sig_io.seek(0)
 
       buffer = io.BytesIO()
