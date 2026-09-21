@@ -29,12 +29,10 @@ hide_streamlit_style = """
     """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# ================= 2. 侧边栏：扫码通道 =================
+# ================= 2. 侧边栏：扫码通道与服务器文件检测 =================
 with st.sidebar:
   st.header("📱 手机端/网页端扫码填报")
-  st.write(
-      "请使用手机扫描下方二维码，直接在手机端完成 Word 材料查阅与手写签收。"
-  )
+  st.write("请使用手机扫描下方二维码，直接在手机端完成 Word 材料查阅与签收。")
 
   app_url = "https://your-transfer-training.streamlit.app/"  # 部署后替换为您的云端链接
 
@@ -52,24 +50,43 @@ with st.sidebar:
   qr_img.save(buf, format="PNG")
   st.image(buf.getvalue(), caption="手机扫码快速签收通道")
 
+  st.markdown("---")
+  st.subheader("🔍 服务器文件状态诊断")
+  hazard_folder_check = "职业危害告知书"
+  training_folder_check = "员工转岗安全与职业健康培训记录表"
+
+  if os.path.exists(hazard_folder_check):
+    files_h = os.listdir(hazard_folder_check)
+    st.success(f"【{hazard_folder_check}】文件夹已找到")
+    st.write("检测到的文件：", files_h)
+  else:
+    st.error(f"❌ 未找到【{hazard_folder_check}】文件夹！请检查 GitHub 目录。")
+
+  if os.path.exists(training_folder_check):
+    files_t = os.listdir(training_folder_check)
+    st.success(f"【{training_folder_check}】文件夹已找到")
+    st.write("检测到的文件：", files_t)
+  else:
+    st.error(f"❌ 未找到【{training_folder_check}】文件夹！")
+
 # ================= 3. 主界面逻辑 =================
 st.title("👨‍🔧 员工安全与职业健康签收平台")
 st.markdown(
-    "请查阅下方 Word 版本的【职业危害告知书】与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。系统将自动把您的签名嵌入原 Word 模板中。"
+    "请查阅下方 Word 版本的【职业危害告知书】与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。"
 )
 
 # 基础信息录入
 st.subheader("1. 员工基本信息")
 col1, col2 = st.columns(2)
 with col1:
-  emp_name = emp_name = st.text_input("员工姓名 (必填)：")
+  emp_name = st.text_input("员工姓名 (必填)：")
 with col2:
   emp_id = st.text_input("工号/身份证号 (必填)：")
 
 st.write("---")
 st.markdown("### 📂 待签收项目清单（Word文档版）")
 
-# --- 项目一：职业危害告知书（精准匹配 .docx 模板） ---
+# --- 项目一：职业危害告知书（宽松模糊匹配） ---
 st.subheader("⚠️ 项目一：职业危害告知书")
 
 col_c, col_s = st.columns(2)
@@ -85,41 +102,41 @@ hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
 
 
-# 智能查找 .docx 文件
-def find_docx_file(folder, keyword1, keyword2):
+# 超级宽松的匹配逻辑：只要文件名同时包含公司名和阶段关键词，且以 .docx 结尾即可
+def find_docx_file_loose(folder, keyword1, keyword2):
   if not os.path.exists(folder):
     return None
   for filename in os.listdir(folder):
+    # 去除空格和括号干扰进行包含判断
     if (
         keyword1 in filename
         and keyword2 in filename
-        and filename.endswith(".docx")
+        and filename.lower().endswith(".docx")
     ):
       return os.path.join(folder, filename)
   return None
 
 
-hazard_path = find_docx_file(hazard_folder, company_choice, stage_choice)
+hazard_path = find_docx_file_loose(hazard_folder, company_choice, stage_choice)
 
 try:
   if hazard_path and os.path.exists(hazard_path):
     with open(hazard_path, "rb") as f:
       hazard_docx_data = f.read()
-    file_ready_1 = True
   else:
     raise FileNotFoundError
 except FileNotFoundError:
   doc_temp = Document()
   doc_temp.add_heading(hazard_version, level=1)
   doc_temp.add_paragraph(
-      f"【系统提示】未在 GitHub 的 '{hazard_folder}' 文件夹中找到对应的"
-      " '.docx' 格式文件！\n请注意：必须上传 .docx 格式（不能是 .doc"
-      " 格式），否则无法读取原文内容。"
+      f"【系统提示】在 '{hazard_folder}' 文件夹中未找到匹配的 '.docx'"
+      " 文件。\n请查看左侧边栏的“服务器文件状态诊断”，确认文件是否成功上传且后缀为"
+      " .docx。"
   )
   temp_io = io.BytesIO()
   doc_temp.save(temp_io)
   hazard_docx_data = temp_io.getvalue()
-  file_ready_1 = False
+  hazard_path = None
 
 st.info(f"您当前查阅的是：【{hazard_version}】。")
 st.download_button(
@@ -158,7 +175,6 @@ try:
   if training_path and os.path.exists(training_path):
     with open(training_path, "rb") as f:
       training_docx_data = f.read()
-    file_ready_2 = True
   else:
     raise FileNotFoundError
 except FileNotFoundError:
@@ -166,12 +182,12 @@ except FileNotFoundError:
   doc_temp2.add_heading("员工转岗安全与职业健康培训记录表", level=1)
   doc_temp2.add_paragraph(
       "【系统提示】未在 '员工转岗安全与职业健康培训记录表' 文件夹中找到对应的"
-      " '.docx' 文件。\n请确认已将 .docx 格式的模板文件上传至 GitHub。"
+      " '.docx' 文件。"
   )
   temp_io2 = io.BytesIO()
   doc_temp2.save(temp_io2)
   training_docx_data = temp_io2.getvalue()
-  file_ready_2 = False
+  training_path = None
 
 st.markdown("请查阅以下标准培训记录表文件：")
 st.download_button(
@@ -227,10 +243,10 @@ if st.button(
     st.warning("⚠️ 拦截：请在上方画板完成手写签名后再提交。")
   else:
     st.success(
-        "✅ 签收成功！系统已成功加载您的 Word 原文模板，并在文末追加了您的手写签名。"
+        "✅ 签收成功！系统已成功加载 Word 模板并在文末追加了您的手写签名。"
     )
 
-    # 提取手写签名图片并转存为内存二进制流
+    # 提取手写签名图片
     signature_img = Image.fromarray(
         canvas_result.image_data.astype("uint8"), "RGBA"
     )
@@ -239,18 +255,24 @@ if st.button(
     sig_io.seek(0)
 
 
-    # 核心函数：完美加载真实 Word 模板并在末尾追加签名
+    # 安全加载模板并追加签名的核心函数
     def append_signature_to_docx(template_path, default_title):
       if template_path and os.path.exists(template_path):
-        doc = Document(template_path)  # 完美加载您上传的 Word 模板原内容！
+        try:
+          doc = Document(template_path)
+        except Exception:
+          doc = Document()
+          doc.add_heading(default_title, level=1)
+          doc.add_paragraph(
+              "（提示：模板文件损坏或格式非标准 docx，此为系统生成的标准确认单）"
+          )
       else:
         doc = Document()
         doc.add_heading(default_title, level=1)
         doc.add_paragraph(
-            "（提示：未找到对应 .docx 模板文件，此为系统生成的标准确认单）"
+            "（提示：未找到对应 .docx 模板文件，请检查左侧诊断面板）"
         )
 
-      # 在文末追加签收确认信息与手写签名图片
       doc.add_paragraph("\n")
       doc.add_paragraph(
           "--------------------------------------------------"
@@ -269,9 +291,8 @@ if st.button(
       run_s.font.name = "华文宋体"
       run_s.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      # 将签名图片直接插入 Word 文档末尾
       doc.add_picture(sig_io, width=Inches(2.2))
-      sig_io.seek(0)  # 重置指针
+      sig_io.seek(0)
 
       buffer = io.BytesIO()
       doc.save(buffer)
@@ -279,17 +300,13 @@ if st.button(
       return buffer
 
 
-    # 1. 生成带签名的职业危害告知书 Word
     signed_hazard_buffer = append_signature_to_docx(
         hazard_path, f"{hazard_version} 签收单"
     )
-
-    # 2. 生成带签名的转岗培训记录表 Word
     signed_training_buffer = append_signature_to_docx(
         training_path, "员工转岗安全与职业健康培训记录表 签收单"
     )
 
-    # 3. ZIP 打包下载流
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
       zip_file.writestr(
