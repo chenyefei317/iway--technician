@@ -53,7 +53,7 @@ with st.sidebar:
 # ================= 3. 主界面逻辑 =================
 st.title("👨‍🔧 员工安全与职业健康签收平台")
 st.markdown(
-    "请查阅下方 Word 版本的【职业危害告知书】（区分公司与上岗前/在岗期间）与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。"
+    "请查阅下方 Word 版本的【职业危害告知书】与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。"
 )
 
 # 基础信息录入
@@ -67,7 +67,7 @@ with col2:
 st.write("---")
 st.markdown("### 📂 待签收项目清单（Word文档版）")
 
-# --- 项目一：职业危害告知书（公司 + 上岗前/在岗期间） ---
+# --- 项目一：职业危害告知书（智能模糊匹配 .docx 文件） ---
 st.subheader("⚠️ 项目一：职业危害告知书")
 
 col_c, col_s = st.columns(2)
@@ -81,19 +81,39 @@ with col_s:
 
 hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
-hazard_filename = f"{hazard_version}.docx"
-hazard_path = os.path.join(hazard_folder, hazard_filename)
+
+
+# 智能模糊查找函数：只要文件名包含公司名和阶段，且后缀为 .docx 就自动匹配
+def find_docx_file(folder, keyword1, keyword2):
+  if not os.path.exists(folder):
+    return None
+  for filename in os.listdir(folder):
+    if (
+        keyword1 in filename
+        and keyword2 in filename
+        and filename.endswith(".docx")
+    ):
+      return os.path.join(folder, filename)
+  return None
+
+
+hazard_path = find_docx_file(
+    hazard_folder, company_choice, stage_choice
+)
 
 try:
-  with open(hazard_path, "rb") as f:
-    hazard_docx_data = f.read()
-  file_ready_1 = True
+  if hazard_path and os.path.exists(hazard_path):
+    with open(hazard_path, "rb") as f:
+      hazard_docx_data = f.read()
+    file_ready_1 = True
+  else:
+    raise FileNotFoundError
 except FileNotFoundError:
   doc_temp = Document()
   doc_temp.add_heading(hazard_version, level=1)
   doc_temp.add_paragraph(
-      f"提示：未在 '{hazard_folder}' 文件夹中找到 '{hazard_filename}'"
-      " 文件，请确认已上传至 GitHub。"
+      f"提示：在 '{hazard_folder}' 文件夹中未找到匹配的 '.docx' 模板文件。"
+      "请确保文件已转换为 .docx 格式并上传。"
   )
   temp_io = io.BytesIO()
   doc_temp.save(temp_io)
@@ -104,7 +124,7 @@ st.info(f"您当前查阅的是：【{hazard_version}】。")
 st.download_button(
     label=f"📥 下载《{hazard_version}.docx》",
     data=hazard_docx_data,
-    file_name=hazard_filename,
+    file_name=f"{hazard_version}.docx",
     mime=(
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ),
@@ -118,19 +138,34 @@ st.write("---")
 # --- 项目二：员工转岗安全与职业健康培训记录表 ---
 st.subheader("🎓 项目二：员工转岗安全与职业健康培训记录表")
 training_folder = "员工转岗安全与职业健康培训记录表"
-training_filename = "员工转岗安全与职业健康培训记录表.docx"
-training_path = os.path.join(training_folder, training_filename)
+
+
+def find_training_file(folder):
+  if not os.path.exists(folder):
+    return None
+  for filename in os.listdir(folder):
+    if "转岗安全与职业健康培训记录表" in filename and filename.endswith(
+        ".docx"
+    ):
+      return os.path.join(folder, filename)
+  return None
+
+
+training_path = find_training_file(training_folder)
 
 try:
-  with open(training_path, "rb") as f:
-    training_docx_data = f.read()
-  file_ready_2 = True
+  if training_path and os.path.exists(training_path):
+    with open(training_path, "rb") as f:
+      training_docx_data = f.read()
+    file_ready_2 = True
+  else:
+    raise FileNotFoundError
 except FileNotFoundError:
   doc_temp2 = Document()
   doc_temp2.add_heading("员工转岗安全与职业健康培训记录表", level=1)
   doc_temp2.add_paragraph(
-      "提示：未在 '员工转岗安全与职业健康培训记录表' 文件夹中找到"
-      " '员工转岗安全与职业健康培训记录表.docx' 文件。"
+      "提示：未在 '员工转岗安全与职业健康培训记录表' 文件夹中找到对应的"
+      " '.docx' 文件。"
   )
   temp_io2 = io.BytesIO()
   doc_temp2.save(temp_io2)
@@ -141,7 +176,7 @@ st.markdown("请查阅以下标准培训记录表文件：")
 st.download_button(
     label="📥 下载《员工转岗安全与职业健康培训记录表.docx》",
     data=training_docx_data,
-    file_name=training_filename,
+    file_name="员工转岗安全与职业健康培训记录表.docx",
     mime=(
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ),
@@ -205,12 +240,14 @@ if st.button(
 
     # 核心函数：读取真实 Word 模板并在末尾追加签名
     def append_signature_to_docx(template_path, default_title):
-      if os.path.exists(template_path):
+      if template_path and os.path.exists(template_path):
         doc = Document(template_path)
       else:
         doc = Document()
         doc.add_heading(default_title, level=1)
-        doc.add_paragraph("（注：未找到对应模板，此为自动生成的标准确认单）")
+        doc.add_paragraph(
+            "（注：已成功完成线上查阅与签收确认，此为系统生成的标准确认单）"
+        )
 
       # 设置统一字体
       for p in doc.paragraphs:
