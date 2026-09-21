@@ -51,7 +51,7 @@ def find_docx_file(folder, keyword1, keyword2):
 # ================= 2. 侧边栏：Logo、微信分享与模板下载 =================
 with st.sidebar:
   try:
-    st.image("logo.png", width=160)  # Logo 放大
+    st.image("logo.png", width=160)
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
@@ -61,7 +61,6 @@ with st.sidebar:
   st.markdown("### 📱 微信扫码与分享")
   st.write("已自动关联您的云端网址，二维码将实时更新供手机扫码填报。")
 
-  # 默认公网链接已更新为您的正式网址
   app_url = st.text_input(
       "应用公网链接 (URL):",
       value="https://iway--technician.streamlit.app",
@@ -122,33 +121,33 @@ with st.sidebar:
   else:
     st.warning("⚠️ 暂未找到该模板")
 
-# ================= 3. 主界面逻辑（Logo 变大并放在标题左边） =================
-col_logo, col_title = st.columns([1, 4])
+# ================= 3. 主界面逻辑（公司名字和Logo一行，主标题单独一行） =================
+col_logo, col_name = st.columns([1, 6])
 with col_logo:
   try:
-    st.image("logo.png", width=130)  # 主页面 Logo 调大合适尺寸
+    st.image("logo.png", width=65)
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
-        width=130,
+        width=65,
     )
-with col_title:
-  st.markdown(
-      "### 慧瑞环保涂料\n## 员工职业危害告知书和转岗培训记录表签收平台"
-  )
+with col_name:
+  st.markdown("### 慧瑞环保涂料")
+
+st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
 
 st.markdown(
     "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收。系统将自动把您的亲笔签名嵌入对应的 Word 正式档案中。"
 )
 
-# 基础信息录入
+# 基础信息录入（仅保留身份证号）
 st.subheader("1. 员工基本信息")
 col1, col2 = st.columns(2)
 with col1:
   emp_name = st.text_input("员工姓名 (必填)：")
 with col2:
   emp_id = st.text_input(
-      "身份证号 / 工号 (必填，须满18位)：",
+      "身份证号 (必填，须满18位)：",
       help="请输入标准的 18 位中国居民身份证号码",
   )
 
@@ -275,19 +274,16 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# 手写签名板块（签字栏已按要求大幅放大）
+# 手写签名板块（已移除括号内说明文字）
 st.write("---")
 st.subheader("✍️ 3. 员工手写签名与提交")
-st.markdown(
-    "**请在下方手写板内签名（画板已放大，方便轻松书写；提交后将自动嵌入 Word"
-    " 模板正文最下方）：**"
-)
+st.markdown("**请在下方手写板内签名：**")
 canvas_result = st_canvas(
     stroke_width=4,
     stroke_color="#000000",
     background_color="#F8F9FA",
-    height=260,  # 高度保持大尺寸
-    width=650,  # 宽度保持大尺寸
+    height=260,
+    width=650,
     drawing_mode="freedraw",
     key="canvas",
     return_image_data=True,
@@ -308,7 +304,7 @@ if st.button(
   id_pattern = re.compile(r"^\d{17}[\dXx]$")
 
   if not emp_name.strip() or not emp_id.strip():
-    st.error("❌ 拦截：请完整填写【员工姓名】与【工号/身份证号】！")
+    st.error("❌ 拦截：请完整填写【员工姓名】与【身份证号】！")
   elif not id_pattern.match(emp_id.strip()):
     st.error(
         "❌ 拦截：身份证号必须为严格的 **18 位**数字（末尾可为大写 X）！"
@@ -362,7 +358,7 @@ if st.button(
 
       p_confirm = doc.add_paragraph()
       run_c = p_confirm.add_run(
-          f"【员工签收确认】\n员工姓名：{emp_name}    工号/身份证：{emp_id}    "
+          f"【员工签收确认】\n员工姓名：{emp_name}    身份证号：{emp_id}    "
           f"签收日期：{sign_date}\n本人已仔细阅读并充分理解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
       )
       run_c.font.name = "华文宋体"
