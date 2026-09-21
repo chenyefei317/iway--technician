@@ -1,3 +1,7 @@
 streamlit
-qrcode
+pandas
+numpy
 Pillow
+streamlit-drawable-canvas
+python-docx
+qrcode
