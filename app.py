@@ -10,6 +10,7 @@ from docx.shared import Inches, RGBColor, Pt
 import pandas as pd
 import qrcode
 from PIL import Image
+import requests
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
@@ -48,7 +49,40 @@ def find_docx_file(folder, keyword1, keyword2):
   return None
 
 
-# ================= 2. 侧边栏：Logo、微信分享与模板下载 =================
+# ================= 2. 百度网盘自动上传函数 =================
+def upload_to_baidu_netdisk(file_bytes, remote_filename):
+  """通过百度网盘开放平台 API 自动上传文件到云端网盘
+
+  需要在百度网盘开放平台申请应用获取 Access Token，
+  并可将 Token 存放在 Streamlit 的 st.secrets 中。
+  """
+  try:
+    # 优先从 Streamlit Secrets 获取 Token，若未配置则跳过并提示
+    access_token = st.secrets.get("BAIDU_ACCESS_TOKEN", "")
+    if not access_token:
+      return (
+          False,
+          "未配置百度网盘 Access Token（可在后台 Secrets 中设置），文件已成功生成并保存在本地/ZIP下载中。",
+      )
+
+    # 百度网盘上传接口地址（目标路径设定在 /apps/慧瑞EHS合规档案/ 目录下）
+    target_path = f"/apps/慧瑞EHS合规档案/{remote_filename}"
+    upload_url = f"https://pan.baidu.com/rest/2.0/xpan/file?method=upload&access_token={access_token}&path={target_path}&uploadid=&file=1"
+
+    files = {"file": (remote_filename, file_bytes)}
+    response = requests.post(upload_url, files=files)
+    result = response.json()
+
+    if "errno" in result and result["errno"] == 0:
+      return True, f"成功自动同步至百度网盘目录：{target_path}"
+    else:
+      err_msg = result.get("error_msg", "未知错误")
+      return False, f"百度网盘上传失败: {err_msg}"
+  except Exception as e:
+    return False, f"上传云盘异常: {str(e)}"
+
+
+# ================= 3. 侧边栏：Logo、微信分享与模板下载 =================
 with st.sidebar:
   try:
     st.image("logo.png", width=160)
@@ -83,7 +117,6 @@ with st.sidebar:
   st.markdown("---")
   st.markdown("### 📥 常用制度模板快捷下载")
 
-  # 1. 转岗培训记录表模板下载
   training_folder_dl = "员工转岗安全与职业健康培训记录表"
   training_path_dl = os.path.join(
       training_folder_dl, "员工转岗安全与职业健康培训记录表.docx"
@@ -96,7 +129,6 @@ with st.sidebar:
           file_name="员工转岗安全与职业健康培训记录表.docx",
       )
 
-  # 2. 侧边栏职业危害告知书下拉下载选项
   st.write("**职业危害告知书下载：**")
   side_company = st.selectbox(
       "选择公司：",
@@ -121,15 +153,15 @@ with st.sidebar:
   else:
     st.warning("⚠️ 暂未找到该模板")
 
-# ================= 3. 主界面逻辑（Logo在左，主标题单独一行） =================
-col_logo, col_title = st.columns([1, 6])
+# ================= 4. 主界面逻辑（Logo 变大并在标题左侧） =================
+col_logo, col_title = st.columns([1, 5])
 with col_logo:
   try:
-    st.image("logo.png", width=65)
+    st.image("logo.png", width=110)  # 调大 Logo 宽度至 110px
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
-        width=65,
+        width=110,
     )
 with col_title:
   st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
@@ -138,7 +170,7 @@ st.markdown(
     "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收。系统将自动把您的亲笔签名嵌入对应的 Word 正式档案中。"
 )
 
-# 基础信息录入（仅保留身份证号）
+# 基础信息录入
 st.subheader("1. 员工基本信息")
 col1, col2 = st.columns(2)
 with col1:
@@ -289,7 +321,7 @@ canvas_result = st_canvas(
 
 sign_date = st.date_input("签收日期：", datetime.date.today())
 
-# ================= 4. 提交校验与生成带签名的 Word 归档 =================
+# ================= 5. 提交校验与生成带签名的 Word 档案 =================
 if st.button(
     "📁 确认无误，一键签收并生成带签名的 Word 档案", use_container_width=True
 ):
@@ -391,6 +423,25 @@ if st.button(
         training_path, "员工转岗安全与职业健康培训记录表 签收单"
     )
 
+    # 尝试自动同步到百度网盘
+    hazard_filename_cloud = f"{hazard_version}_{emp_name}_{emp_id[-4:]}_已签字.docx"
+    training_filename_cloud = (
+        f"员工转岗培训记录表_{emp_name}_{emp_id[-4:]}_已签字.docx"
+    )
+
+    success_h, msg_h = upload_to_baidu_netdisk(
+        signed_hazard_buffer.getvalue(), hazard_filename_cloud
+    )
+    success_t, msg_t = upload_to_baidu_netdisk(
+        signed_training_buffer.getvalue(), training_filename_cloud
+    )
+
+    if success_h or success_t:
+      st.info(f"☁️ 云盘同步状态：\n- {msg_h}\n- {msg_t}")
+    else:
+      st.warning(f"☁️ 云盘同步提示：{msg_h}")
+
+    # ZIP 打包下载流
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
       zip_file.writestr(
@@ -443,7 +494,7 @@ if st.button(
 
     st.balloons()
 
-# ================= 5. 底部版权与开发者声明 =================
+# ================= 6. 底部版权与开发者声明 =================
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray; font-size: 14px;'>"
