@@ -32,7 +32,9 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # ================= 2. 侧边栏：扫码通道 =================
 with st.sidebar:
   st.header("📱 手机端/网页端扫码填报")
-  st.write("请使用手机扫描下方二维码，直接在手机端完成 Word 材料查阅与签收。")
+  st.write(
+      "请使用手机扫描下方二维码，直接在手机端完成 Word 材料查阅与手写签收。"
+  )
 
   app_url = "https://your-transfer-training.streamlit.app/"  # 部署后替换为您的云端链接
 
@@ -53,21 +55,21 @@ with st.sidebar:
 # ================= 3. 主界面逻辑 =================
 st.title("👨‍🔧 员工安全与职业健康签收平台")
 st.markdown(
-    "请查阅下方 Word 版本的【职业危害告知书】与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。"
+    "请查阅下方 Word 版本的【职业危害告知书】与【员工转岗安全与职业健康培训记录表】，勾选确认并在底部完成手写签收。系统将自动把您的签名嵌入原 Word 模板中。"
 )
 
 # 基础信息录入
 st.subheader("1. 员工基本信息")
 col1, col2 = st.columns(2)
 with col1:
-  emp_name = st.text_input("员工姓名 (必填)：")
+  emp_name = emp_name = st.text_input("员工姓名 (必填)：")
 with col2:
   emp_id = st.text_input("工号/身份证号 (必填)：")
 
 st.write("---")
 st.markdown("### 📂 待签收项目清单（Word文档版）")
 
-# --- 项目一：职业危害告知书（智能模糊匹配 .docx 文件） ---
+# --- 项目一：职业危害告知书（精准匹配 .docx 模板） ---
 st.subheader("⚠️ 项目一：职业危害告知书")
 
 col_c, col_s = st.columns(2)
@@ -83,7 +85,7 @@ hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
 
 
-# 智能模糊查找函数：只要文件名包含公司名和阶段，且后缀为 .docx 就自动匹配
+# 智能查找 .docx 文件
 def find_docx_file(folder, keyword1, keyword2):
   if not os.path.exists(folder):
     return None
@@ -97,9 +99,7 @@ def find_docx_file(folder, keyword1, keyword2):
   return None
 
 
-hazard_path = find_docx_file(
-    hazard_folder, company_choice, stage_choice
-)
+hazard_path = find_docx_file(hazard_folder, company_choice, stage_choice)
 
 try:
   if hazard_path and os.path.exists(hazard_path):
@@ -112,8 +112,9 @@ except FileNotFoundError:
   doc_temp = Document()
   doc_temp.add_heading(hazard_version, level=1)
   doc_temp.add_paragraph(
-      f"提示：在 '{hazard_folder}' 文件夹中未找到匹配的 '.docx' 模板文件。"
-      "请确保文件已转换为 .docx 格式并上传。"
+      f"【系统提示】未在 GitHub 的 '{hazard_folder}' 文件夹中找到对应的"
+      " '.docx' 格式文件！\n请注意：必须上传 .docx 格式（不能是 .doc"
+      " 格式），否则无法读取原文内容。"
   )
   temp_io = io.BytesIO()
   doc_temp.save(temp_io)
@@ -164,8 +165,8 @@ except FileNotFoundError:
   doc_temp2 = Document()
   doc_temp2.add_heading("员工转岗安全与职业健康培训记录表", level=1)
   doc_temp2.add_paragraph(
-      "提示：未在 '员工转岗安全与职业健康培训记录表' 文件夹中找到对应的"
-      " '.docx' 文件。"
+      "【系统提示】未在 '员工转岗安全与职业健康培训记录表' 文件夹中找到对应的"
+      " '.docx' 文件。\n请确认已将 .docx 格式的模板文件上传至 GitHub。"
   )
   temp_io2 = io.BytesIO()
   doc_temp2.save(temp_io2)
@@ -190,7 +191,7 @@ st.write("---")
 st.subheader("✍️ 3. 员工手写签名与提交")
 st.markdown(
     "**请在下方空白处手写签名（签名与基本信息将自动嵌入并“盖章”到下载的"
-    " Word 文档中）：**"
+    " Word 模板正文最下方）：**"
 )
 canvas_result = st_canvas(
     stroke_width=3,
@@ -226,7 +227,7 @@ if st.button(
     st.warning("⚠️ 拦截：请在上方画板完成手写签名后再提交。")
   else:
     st.success(
-        "✅ 签收成功！系统已将您的手写签名成功追加并嵌入到 Word 文档末尾。"
+        "✅ 签收成功！系统已成功加载您的 Word 原文模板，并在文末追加了您的手写签名。"
     )
 
     # 提取手写签名图片并转存为内存二进制流
@@ -238,23 +239,16 @@ if st.button(
     sig_io.seek(0)
 
 
-    # 核心函数：读取真实 Word 模板并在末尾追加签名
+    # 核心函数：完美加载真实 Word 模板并在末尾追加签名
     def append_signature_to_docx(template_path, default_title):
       if template_path and os.path.exists(template_path):
-        doc = Document(template_path)
+        doc = Document(template_path)  # 完美加载您上传的 Word 模板原内容！
       else:
         doc = Document()
         doc.add_heading(default_title, level=1)
         doc.add_paragraph(
-            "（注：已成功完成线上查阅与签收确认，此为系统生成的标准确认单）"
+            "（提示：未找到对应 .docx 模板文件，此为系统生成的标准确认单）"
         )
-
-      # 设置统一字体
-      for p in doc.paragraphs:
-        for r in p.runs:
-          if not r.font.name:
-            r.font.name = "华文宋体"
-            r.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
       # 在文末追加签收确认信息与手写签名图片
       doc.add_paragraph("\n")
@@ -275,7 +269,7 @@ if st.button(
       run_s.font.name = "华文宋体"
       run_s.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      # 将签名图片直接插入 Word 文档
+      # 将签名图片直接插入 Word 文档末尾
       doc.add_picture(sig_io, width=Inches(2.2))
       sig_io.seek(0)  # 重置指针
 
