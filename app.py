@@ -115,7 +115,7 @@ with st.sidebar:
   st.write("已自动关联您的云端网址，二维码将实时更新供手机扫码填报。")
 
   app_url = st.text_input(
-      "应用公网链接 (URL):", value="https://iway--technician.streamlit.app"
+      "应用公网链接 (URL)", value="https://iway--technician.streamlit.app"
   )
 
   if app_url:
@@ -169,20 +169,20 @@ with st.sidebar:
     st.warning("⚠️ 暂未找到该模板")
 
 # ================= 4. 主界面逻辑（Logo在左侧，尺寸加大，主标题单独一行） =================
-col_logo, col_title = st.columns([1, 4])
+col_logo, col_title = st.columns([1, 6])
 with col_logo:
   try:
-    st.image("logo.png", width=140)  # Logo 变大
+    st.image("logo.png", width=110)  # Logo 变大
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
-        width=140,
+        width=110,
     )
 with col_title:
   st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
 
 st.markdown(
-    "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收。系统将自动把您的亲笔签名嵌入对应的 Word 正式档案中。"
+    "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收与手写日期。系统将自动把您的亲笔签名嵌入对应的 Word 正式档案中。"
 )
 
 # 基础信息录入
@@ -317,42 +317,50 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# ================= 5. 手写签名与手写日期栏（并排布局，日期必填） =================
+# ================= 5. 手写签名与手写日期栏（并排双画布，均为必填） =================
 st.write("---")
-st.subheader("✍️ 3. 员工手写签名与签收日期")
+st.subheader("✍️ 3. 员工手写签名与手写日期栏")
 st.markdown(
-    "**请在左侧手写板内签名，并在右侧填写签收日期（两项均为必填）：**"
+    "**请在左侧手写签名，并在右侧手写日期（注明今天日期是2026年9月23号）：**"
 )
 
-col_sig, col_date = st.columns([3, 2])
+col_sig, col_date = st.columns(2)
 with col_sig:
-  st.markdown("**手写签名区：**")
+  st.markdown("**手写签名：**")
   canvas_result = st_canvas(
       stroke_width=4,
       stroke_color="#000000",
       background_color="#F8F9FA",
-      height=220,
-      width=400,
+      height=200,
+      width=320,
       drawing_mode="freedraw",
-      key="canvas",
+      key="canvas_sig",
       return_image_data=True,
   )
 with col_date:
-  st.markdown("**手写日期栏：**")
-  sig_date_str = st.text_input(
-      "请输入签署日期 (如 2026-06-06)：",
-      value="",
-      help="必须填写签署日期方可提交",
+  st.markdown("**手写日期栏（请手写日期）：**")
+  canvas_date_result = st_canvas(
+      stroke_width=3,
+      stroke_color="#000000",
+      background_color="#F8F9FA",
+      height=200,
+      width=320,
+      drawing_mode="freedraw",
+      key="canvas_date",
+      return_image_data=True,
   )
-  st.info("提示：请核对日期准确后提交。")
 
-# ================= 6. 提交校验与生成带签名的 Word 归档 =================
+# ================= 6. 提交校验与生成带签名的 Word 档案 =================
 if st.button(
     "📁 确认无误，一键签收并生成带签名的 Word 档案", use_container_width=True
 ):
   is_canvas_empty = canvas_result.image_data is None or (
       canvas_result.json_data is not None
       and len(canvas_result.json_data.get("objects", [])) == 0
+  )
+  is_date_empty = canvas_date_result.image_data is None or (
+      canvas_date_result.json_data is not None
+      and len(canvas_date_result.json_data.get("objects", [])) == 0
   )
 
   id_pattern = re.compile(r"^\d{17}[\dXx]$")
@@ -368,12 +376,12 @@ if st.button(
         "❌ 拦截：请至少勾选并完成一项签收（职业危害告知书或转岗培训记录表）！"
     )
   elif is_canvas_empty:
-    st.warning("⚠️ 拦截：请在上方画板完成手写签名后再提交。")
-  elif not sig_date_str.strip():
-    st.warning("⚠️ 拦截：请在右侧填写手写日期栏后再提交！")
+    st.warning("⚠️ 拦截：请在左侧画板完成手写签名后再提交。")
+  elif is_date_empty:
+    st.warning("⚠️ 拦截：请在右侧手写日期栏内完成手写日期后再提交！")
   else:
     st.success(
-        "✅ 签收成功！系统已成功加载模板并在文末追加了您的手写签名与日期。"
+        "✅ 签收成功！系统已成功加载 Word 模板并在文末追加了您的手写签名与日期。"
     )
 
     signature_img = Image.fromarray(
@@ -382,6 +390,13 @@ if st.button(
     sig_io = io.BytesIO()
     signature_img.save(sig_io, format="PNG")
     sig_io.seek(0)
+
+    date_img = Image.fromarray(
+        canvas_date_result.image_data.astype("uint8"), "RGBA"
+    )
+    date_io = io.BytesIO()
+    date_img.save(date_io, format="PNG")
+    date_io.seek(0)
 
 
     def append_signature_to_docx(template_path, default_title):
@@ -412,23 +427,34 @@ if st.button(
       p_confirm.paragraph_format.space_before = Pt(0)
       p_confirm.paragraph_format.space_after = Pt(2)
       run_c = p_confirm.add_run(
-          f"【员工签收确认】 姓名：{emp_name} | 身份证号：{emp_id} | 签收日期："
-          f"{sig_date_str.strip()}\n本人已仔细阅读并充分了解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
+          f"【员工签收确认】 姓名：{emp_name} | 身份证号：{emp_id}\n"
+          f"本人已仔细阅读并充分理解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
       )
       run_c.font.name = "华文宋体"
       run_c.font.size = Pt(10.5)
       run_c.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      p_sig_label = doc.add_paragraph()
-      p_sig_label.paragraph_format.space_before = Pt(0)
-      p_sig_label.paragraph_format.space_after = Pt(2)
-      run_s = p_sig_label.add_run("员工本人手写亲笔签名：")
-      run_s.font.name = "华文宋体"
-      run_s.font.size = Pt(10.5)
-      run_s.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
+      # 用 Word 表格将手写签名与手写日期并排在同一页底部
+      table = doc.add_table(rows=1, cols=2)
+      table.autofit = False
 
-      doc.add_picture(sig_io, width=Inches(1.8))
+      cell_sig = table.cell(0, 0)
+      p1 = cell_sig.paragraphs[0]
+      r1 = p1.add_run("员工手写签名：\n")
+      r1.font.name = "华文宋体"
+      r1.font.size = Pt(10)
+      r1.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
+      p1.add_run().add_picture(sig_io, width=Inches(1.6))
       sig_io.seek(0)
+
+      cell_date = table.cell(0, 1)
+      p2 = cell_date.paragraphs[0]
+      r2 = p2.add_run("手写日期：\n")
+      r2.font.name = "华文宋体"
+      r2.font.size = Pt(10)
+      r2.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
+      p2.add_run().add_picture(date_io, width=Inches(1.6))
+      date_io.seek(0)
 
       buffer = io.BytesIO()
       doc.save(buffer)
@@ -438,7 +464,6 @@ if st.button(
     # 动态生成用户勾选的文件
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-      # 勾选了危害告知书时生成
       if c_hazard:
         signed_hazard_buffer = append_signature_to_docx(
             hazard_path, f"{hazard_version} 签收单"
@@ -453,7 +478,6 @@ if st.button(
             signed_hazard_buffer.getvalue(), hazard_filename_cloud
         )
 
-      # 勾选了培训记录表时生成
       if c_training:
         signed_training_buffer = append_signature_to_docx(
             training_path, "员工转岗安全与职业健康培训记录表 签收单"
@@ -468,12 +492,10 @@ if st.button(
             signed_training_buffer.getvalue(), training_filename_cloud
         )
 
-      # 保存手写签名原图
       img_byte_arr = io.BytesIO()
       signature_img.save(img_byte_arr, format="PNG")
       zip_file.writestr(
-          f"手写签名原图_{emp_name}_{sig_date_str.strip()}.png",
-          img_byte_arr.getvalue(),
+          f"手写签名原图_{emp_name}.png", img_byte_arr.getvalue()
       )
 
     zip_buffer.seek(0)
@@ -509,7 +531,7 @@ if st.button(
     st.download_button(
         label="📥 一键打包下载全部签收档案 (.ZIP)",
         data=zip_buffer,
-        file_name=f"安全合规档案_{emp_name}_{sig_date_str.strip()}.zip",
+        file_name=f"安全合规档案_{emp_name}.zip",
         mime="application/zip",
         use_container_width=True,
     )
