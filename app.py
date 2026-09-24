@@ -34,6 +34,50 @@ hide_streamlit_style = """
     """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
+# ================= 2. 4位访问密码拦截验证 =================
+if "authenticated" not in st.session_state:
+  st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+  col_l, col_t = st.columns([1, 6])
+  with col_l:
+    try:
+      st.image("logo.png", width=110)
+    except Exception:
+      st.image(
+          "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
+          width=110,
+      )
+  with col_t:
+    st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
+
+  st.markdown("---")
+  st.info("🔒 本系统为内部合规平台，请输入 **4位访问密码** 进入系统。")
+
+  with st.form("password_form"):
+    pwd_input = st.text_input(
+        "请输入 4 位访问密码：", type="password", max_chars=4
+    )
+    submit_pwd = st.form_submit_button("进入系统", use_container_width=True)
+
+  if submit_pwd:
+    # 默认密码为 8888，也可在 Streamlit Secrets 中配置 APP_PASSWORD
+    correct_pwd = st.secrets.get("APP_PASSWORD", "8888")
+    if pwd_input == correct_pwd:
+      st.session_state.authenticated = True
+      st.rerun()
+    else:
+      st.error("❌ 密码错误，请重新输入！")
+
+  st.markdown("---")
+  st.markdown(
+      "<div style='text-align: center; color: gray; font-size: 14px;'>"
+      "本系统为内部合规平台，严禁商业用途 | 开发者：陈野菲"
+      "</div>",
+      unsafe_allow_html=True,
+  )
+  st.stop()
+
 
 # 智能模糊查找 Word 文件函数（通用）
 def find_docx_file(folder, keyword1, keyword2=None):
@@ -53,7 +97,7 @@ def find_docx_file(folder, keyword1, keyword2=None):
   return None
 
 
-# ================= 2. 百度网盘自动上传函数（带 OAuth2 自动刷新） =================
+# ================= 3. 百度网盘自动上传函数（带 OAuth2 自动刷新） =================
 def refresh_baidu_access_token():
   try:
     client_id = st.secrets.get("BAIDU_CLIENT_ID", "")
@@ -105,7 +149,7 @@ def upload_to_baidu_netdisk_with_auto_refresh(file_bytes, remote_filename):
     return False, f"网盘上传失败: {result.get('error_msg', '未知错误')}"
 
 
-# ================= 3. 侧边栏：Logo、微信分享与模板下载 =================
+# ================= 4. 侧边栏：Logo、微信分享与模板下载 =================
 with st.sidebar:
   try:
     st.image("logo.png", width=160)
@@ -173,7 +217,7 @@ with st.sidebar:
   else:
     st.warning("⚠️ 暂未找到对应的 Word 模板")
 
-# ================= 4. 主界面逻辑（Logo在左侧，主标题单独一行） =================
+# ================= 5. 主界面逻辑（Logo在左侧，主标题单独一行） =================
 col_logo, col_title = st.columns([1, 6])
 with col_logo:
   try:
@@ -310,7 +354,7 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# ================= 5. 手写签名与手写日期栏（并排双画布，动态关联当前系统日期） =================
+# ================= 6. 手写签名与手写日期栏（并排双画布，动态关联当前系统日期） =================
 current_date_str = datetime.date.today().strftime("%Y年%m月%d日")
 
 st.write("---")
@@ -347,7 +391,7 @@ with col_date:
   )
 
 
-# ================= 6. 辅助函数：向 Word 模板文末追加签名与日期 =================
+# ================= 7. 辅助函数：向 Word 模板文末追加签名与日期 =================
 def append_signature_to_docx(
     template_path, default_title, sig_image_io, date_image_io
 ):
@@ -412,7 +456,7 @@ def append_signature_to_docx(
   return buffer
 
 
-# ================= 7. 提交校验与生成带签名的档案 =================
+# ================= 8. 提交校验与生成带签名的档案 =================
 if st.button(
     "📁 确认无误，一键签收并生成带签名的合规档案", use_container_width=True
 ):
@@ -545,11 +589,11 @@ if st.button(
 
     st.balloons()
 
-# ================= 8. 底部版权与开发者声明 =================
+# ================= 9. 底部版权与开发者声明 =================
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray; font-size: 14px;'>"
-    "内部使用，严禁商业用途 | 开发者：陈野菲 Yefei"
+    "本系统为内部合规平台，严禁商业用途 | 开发者：陈野菲"
     "</div>",
     unsafe_allow_html=True,
 )
