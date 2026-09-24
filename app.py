@@ -35,15 +35,27 @@ hide_streamlit_style = """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 
-# 智能模糊查找 .docx 文件通用函数
-def find_docx_file(folder, keyword1, keyword2):
+# 智能模糊查找 PDF 文件函数（用于职业危害告知书）
+def find_pdf_file(folder, keyword1, keyword2):
   if not os.path.exists(folder):
     return None
   for filename in os.listdir(folder):
     if (
         keyword1 in filename
         and keyword2 in filename
-        and filename.lower().endswith(".docx")
+        and filename.lower().endswith(".pdf")
+    ):
+      return os.path.join(folder, filename)
+  return None
+
+
+# 智能模糊查找 Word 文件函数（用于转岗培训记录表）
+def find_training_file(folder):
+  if not os.path.exists(folder):
+    return None
+  for filename in os.listdir(folder):
+    if "转岗安全与职业健康培训记录表" in filename and filename.endswith(
+        ".docx"
     ):
       return os.path.join(folder, filename)
   return None
@@ -132,11 +144,10 @@ with st.sidebar:
   st.markdown("---")
   st.markdown("### 📥 常用制度模板快捷下载")
 
+  # 培训记录表下载
   training_folder_dl = "员工转岗安全与职业健康培训记录表"
-  training_path_dl = os.path.join(
-      training_folder_dl, "员工转岗安全与职业健康培训记录表.docx"
-  )
-  if os.path.exists(training_path_dl):
+  training_path_dl = find_training_file(training_folder_dl)
+  if training_path_dl and os.path.exists(training_path_dl):
     with open(training_path_dl, "rb") as ft:
       st.download_button(
           label="📄 转岗培训记录表模板",
@@ -144,7 +155,8 @@ with st.sidebar:
           file_name="员工转岗安全与职业健康培训记录表.docx",
       )
 
-  st.write("**职业危害告知书下载：**")
+  # 侧边栏职业危害告知书 PDF 下载
+  st.write("**职业危害告知书 PDF 下载：**")
   side_company = st.selectbox(
       "选择公司：",
       ["安徽恒林", "大连宜家", "东莞时兴", "福建龙竹", "福建双翼"],
@@ -154,25 +166,25 @@ with st.sidebar:
       "选择阶段：", ["上岗前", "在岗期间"], key="side_stage"
   )
 
-  side_hazard_path = find_docx_file(
+  side_hazard_path = find_pdf_file(
       "职业危害告知书", side_company, side_stage
   )
   if side_hazard_path and os.path.exists(side_hazard_path):
     with open(side_hazard_path, "rb") as fsh:
       st.download_button(
-          label="📥 下载选中的告知书",
+          label=f"📥 下载选中的告知书",
           data=fsh.read(),
-          file_name=f"职业危害告知书 - {side_company}（{side_stage}）.docx",
+          file_name=f"职业危害告知书 - {side_company}（{side_stage}）.pdf",
           key="side_dl_hazard_btn",
       )
   else:
-    st.warning("⚠️ 暂未找到该模板")
+    st.warning("⚠️ 暂未找到对应的 PDF 模板")
 
-# ================= 4. 主界面逻辑（Logo在左侧，尺寸加大，主标题单独一行） =================
+# ================= 4. 主界面逻辑（Logo在左侧，主标题单独一行） =================
 col_logo, col_title = st.columns([1, 6])
 with col_logo:
   try:
-    st.image("logo.png", width=110)  # Logo 变大
+    st.image("logo.png", width=110)
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
@@ -199,7 +211,7 @@ with col2:
 st.write("---")
 st.markdown("### 📂 待签收项目清单")
 
-# --- 项目一：职业危害告知书（非必选项） ---
+# --- 项目一：职业危害告知书（PDF版本，非必选项） ---
 st.subheader("⚠️ 项目一：职业危害告知书 (可选)")
 
 col_c, col_s = st.columns(2)
@@ -213,46 +225,43 @@ with col_s:
 
 hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
-hazard_path = find_docx_file(hazard_folder, company_choice, stage_choice)
+hazard_pdf_path = find_pdf_file(hazard_folder, company_choice, stage_choice)
 
 try:
-  if hazard_path and os.path.exists(hazard_path):
-    with open(hazard_path, "rb") as f:
-      hazard_docx_data = f.read()
+  if hazard_pdf_path and os.path.exists(hazard_pdf_path):
+    with open(hazard_pdf_path, "rb") as f:
+      hazard_pdf_data = f.read()
   else:
     raise FileNotFoundError
 except FileNotFoundError:
-  doc_temp = Document()
-  doc_temp.add_heading(hazard_version, level=1)
-  doc_temp.add_paragraph(
-      f"【系统提示】在 '{hazard_folder}' 文件夹中未找到匹配的 '.docx'"
-      " 文件，请确认已上传至 GitHub。"
-  )
-  temp_io = io.BytesIO()
-  doc_temp.save(temp_io)
-  hazard_docx_data = temp_io.getvalue()
-  hazard_path = None
+  hazard_pdf_data = b"PDF Template not found."
+  hazard_pdf_path = None
 
 st.info(f"您当前查阅的是：【{hazard_version}】。")
-st.download_button(
-    label=f"📥 下载《{hazard_version}.docx》",
-    data=hazard_docx_data,
-    file_name=f"{hazard_version}.docx",
-    mime=(
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ),
-)
+if hazard_pdf_path:
+  st.download_button(
+      label=f"📥 下载《{hazard_version}.pdf》",
+      data=hazard_pdf_data,
+      file_name=f"{hazard_version}.pdf",
+      mime="application/pdf",
+  )
+else:
+  st.error(
+      f"❌ 未在 '{hazard_folder}' 文件夹中找到对应的 PDF 文件，请确认已上传至"
+      " GitHub。"
+  )
+
 c_hazard = st.checkbox(
     f"【可选确认】本人已阅读并充分了解《{hazard_version}》的相关职业危害与防护要求，承诺在工作中严格落实。"
 )
 
-with st.expander("📚 附加查阅：全套《职业危害告知书》模板快捷下载专区"):
+with st.expander("📚 附加查阅：全套《职业危害告知书》PDF 快捷下载专区"):
   st.write(
       "如需查阅或下载其他公司/阶段的职业危害告知书，可直接点击下方按钮："
   )
   if os.path.exists(hazard_folder):
     all_hazard_files = [
-        f for f in os.listdir(hazard_folder) if f.lower().endswith(".docx")
+        f for f in os.listdir(hazard_folder) if f.lower().endswith(".pdf")
     ]
     for hf in all_hazard_files:
       full_hf_path = os.path.join(hazard_folder, hf)
@@ -261,29 +270,16 @@ with st.expander("📚 附加查阅：全套《职业危害告知书》模板快
             label=f"📥 下载：{hf}",
             data=fh.read(),
             file_name=hf,
-            key=f"dl_all_{hf}",
+            key=f"dl_all_pdf_{hf}",
         )
   else:
-    st.write("暂无其他告知书文件。")
+    st.write("暂无其他告知书 PDF 文件。")
 
 st.write("---")
 
 # --- 项目二：员工转岗安全与职业健康培训记录表 ---
 st.subheader("🎓 项目二：员工转岗安全与职业健康培训记录表")
 training_folder = "员工转岗安全与职业健康培训记录表"
-
-
-def find_training_file(folder):
-  if not os.path.exists(folder):
-    return None
-  for filename in os.listdir(folder):
-    if "转岗安全与职业健康培训记录表" in filename and filename.endswith(
-        ".docx"
-    ):
-      return os.path.join(folder, filename)
-  return None
-
-
 training_path = find_training_file(training_folder)
 
 try:
@@ -317,11 +313,14 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# ================= 5. 手写签名与手写日期栏（并排双画布，均为必填） =================
+# ================= 5. 手写签名与手写日期栏（并排双画布，均为必填，动态显示当前日期） =================
+current_date_str = datetime.date.today().strftime("%Y年%m月%d日")
+
 st.write("---")
 st.subheader("✍️ 3. 员工手写签名与手写日期栏")
 st.markdown(
-    "**请在左侧手写签名，并在右侧手写日期（注明今天日期是2026年9月23号）：**"
+    f"**请在左侧手写签名，并在右侧手写日期（注：当前系统日期为"
+    f" {current_date_str}，请按此手写日期）：**"
 )
 
 col_sig, col_date = st.columns(2)
@@ -338,7 +337,7 @@ with col_sig:
       return_image_data=True,
   )
 with col_date:
-  st.markdown("**手写日期栏（请手写日期）：**")
+  st.markdown("**手写日期栏（请手写当前日期）：**")
   canvas_date_result = st_canvas(
       stroke_width=3,
       stroke_color="#000000",
@@ -381,7 +380,7 @@ if st.button(
     st.warning("⚠️ 拦截：请在右侧手写日期栏内完成手写日期后再提交！")
   else:
     st.success(
-        "✅ 签收成功！系统已成功加载 Word 模板并在文末追加了您的手写签名与日期。"
+        "✅ 签收成功！系统已成功加载模板并在文末追加了您的手写签名与日期。"
     )
 
     signature_img = Image.fromarray(
@@ -461,24 +460,21 @@ if st.button(
       buffer.seek(0)
       return buffer
 
-    # 动态生成用户勾选的文件
+    # 动态生成用户勾选的文件并打包
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-      if c_hazard:
-        signed_hazard_buffer = append_signature_to_docx(
-            hazard_path, f"{hazard_version} 签收单"
-        )
+      if c_hazard and hazard_pdf_path and os.path.exists(hazard_pdf_path):
+        with open(hazard_pdf_path, "rb") as fpdf:
+          pdf_bytes = fpdf.read()
         hazard_filename_cloud = (
-            f"{hazard_version}_{emp_name}_{emp_id[-4:]}_已签字.docx"
+            f"{hazard_version}_{emp_name}_{emp_id[-4:]}.pdf"
         )
-        zip_file.writestr(
-            hazard_filename_cloud, signed_hazard_buffer.getvalue()
-        )
+        zip_file.writestr(hazard_filename_cloud, pdf_bytes)
         upload_to_baidu_netdisk_with_auto_refresh(
-            signed_hazard_buffer.getvalue(), hazard_filename_cloud
+            pdf_bytes, hazard_filename_cloud
         )
 
-      if c_training:
+      if c_training and training_path:
         signed_training_buffer = append_signature_to_docx(
             training_path, "员工转岗安全与职业健康培训记录表 签收单"
         )
@@ -492,31 +488,34 @@ if st.button(
             signed_training_buffer.getvalue(), training_filename_cloud
         )
 
+      # 保存手写签名及手写日期原图
       img_byte_arr = io.BytesIO()
       signature_img.save(img_byte_arr, format="PNG")
       zip_file.writestr(
           f"手写签名原图_{emp_name}.png", img_byte_arr.getvalue()
       )
 
+      date_byte_arr = io.BytesIO()
+      date_img.save(date_byte_arr, format="PNG")
+      zip_file.writestr(f"手写日期原图_{emp_name}.png", date_byte_arr.getvalue())
+
     zip_buffer.seek(0)
 
     st.markdown("---")
     st.success(
-        "🎉 您的专属带签名 Word 合规档案已打包完毕，点击下方按钮即可下载！"
+        "🎉 您的专属带签名合规档案已打包完毕，点击下方按钮即可下载！"
     )
 
     col_d1, col_d2 = st.columns(2)
-    if c_hazard:
+    if c_hazard and hazard_pdf_path and os.path.exists(hazard_pdf_path):
       with col_d1:
         st.download_button(
-            label="📄 下载带签名的告知书 (.docx)",
-            data=signed_hazard_buffer.getvalue(),
-            file_name=f"{hazard_version}_{emp_name}_已签字.docx",
-            mime=(
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            ),
+            label="📄 下载选中的告知书 (.pdf)",
+            data=hazard_pdf_data,
+            file_name=f"{hazard_version}.pdf",
+            mime="application/pdf",
         )
-    if c_training:
+    if c_training and training_path:
       with col_d2:
         st.download_button(
             label="📄 下载带签名的培训表 (.docx)",
