@@ -2,7 +2,6 @@ import datetime
 import io
 import os
 import re
-import urllib.request
 import zipfile
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -11,10 +10,6 @@ from docx.shared import Inches, RGBColor, Pt
 import pandas as pd
 import qrcode
 from PIL import Image
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen import canvas
 import requests
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
@@ -40,29 +35,21 @@ hide_streamlit_style = """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 
-# 智能模糊查找 PDF 文件函数（用于职业危害告知书）
-def find_pdf_file(folder, keyword1, keyword2):
+# 智能模糊查找 Word 文件函数（通用）
+def find_docx_file(folder, keyword1, keyword2=None):
   if not os.path.exists(folder):
     return None
   for filename in os.listdir(folder):
-    if (
-        keyword1 in filename
-        and keyword2 in filename
-        and filename.lower().endswith(".pdf")
-    ):
-      return os.path.join(folder, filename)
-  return None
-
-
-# 智能模糊查找 Word 文件函数（用于转岗培训记录表）
-def find_training_file(folder):
-  if not os.path.exists(folder):
-    return None
-  for filename in os.listdir(folder):
-    if "转岗安全与职业健康培训记录表" in filename and filename.endswith(
-        ".docx"
-    ):
-      return os.path.join(folder, filename)
+    if keyword2:
+      if (
+          keyword1 in filename
+          and keyword2 in filename
+          and filename.lower().endswith(".docx")
+      ):
+        return os.path.join(folder, filename)
+    else:
+      if keyword1 in filename and filename.lower().endswith(".docx"):
+        return os.path.join(folder, filename)
   return None
 
 
@@ -149,8 +136,10 @@ with st.sidebar:
   st.markdown("---")
   st.markdown("### 📥 常用制度模板快捷下载")
 
-  training_folder_dl = "员工转岗安全与职业健康培训记录表"
-  training_path_dl = find_training_file(training_folder_dl)
+  # 培训记录表模板下载
+  training_path_dl = find_docx_file(
+      "员工转岗安全与职业健康培训记录表", "转岗安全与职业健康培训记录表"
+  )
   if training_path_dl and os.path.exists(training_path_dl):
     with open(training_path_dl, "rb") as ft:
       st.download_button(
@@ -159,7 +148,8 @@ with st.sidebar:
           file_name="员工转岗安全与职业健康培训记录表.docx",
       )
 
-  st.write("**职业危害告知书 PDF 下载：**")
+  # 侧边栏职业危害告知书 Word 下载
+  st.write("**职业危害告知书 Word 下载：**")
   side_company = st.selectbox(
       "选择公司：",
       ["安徽恒林", "大连宜家", "东莞时兴", "福建龙竹", "福建双翼"],
@@ -169,7 +159,7 @@ with st.sidebar:
       "选择阶段：", ["上岗前", "在岗期间"], key="side_stage"
   )
 
-  side_hazard_path = find_pdf_file(
+  side_hazard_path = find_docx_file(
       "职业危害告知书", side_company, side_stage
   )
   if side_hazard_path and os.path.exists(side_hazard_path):
@@ -177,11 +167,11 @@ with st.sidebar:
       st.download_button(
           label=f"📥 下载选中的告知书",
           data=fsh.read(),
-          file_name=f"职业危害告知书 - {side_company}（{side_stage}）.pdf",
+          file_name=f"职业危害告知书 - {side_company}（{side_stage}）.docx",
           key="side_dl_hazard_btn",
       )
   else:
-    st.warning("⚠️ 暂未找到对应的 PDF 模板")
+    st.warning("⚠️ 暂未找到对应的 Word 模板")
 
 # ================= 4. 主界面逻辑（Logo在左侧，主标题单独一行） =================
 col_logo, col_title = st.columns([1, 6])
@@ -197,7 +187,8 @@ with col_title:
   st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
 
 st.markdown(
-    "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收与手写日期。系统将自动生成包含您亲笔签名与手写日期的正式合规档案。"
+    "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收与手写日期。系统将自动把您的亲笔签名与手写日期嵌入对应的"
+    " Word 正式档案中。"
 )
 
 # 基础信息录入
@@ -214,7 +205,7 @@ with col2:
 st.write("---")
 st.markdown("### 📂 待签收项目清单")
 
-# --- 项目一：职业危害告知书（PDF版本，非必选项） ---
+# --- 项目一：职业危害告知书（Word版本，非必选项） ---
 st.subheader("⚠️ 项目一：职业危害告知书 (可选)")
 
 col_c, col_s = st.columns(2)
@@ -228,43 +219,46 @@ with col_s:
 
 hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
-hazard_pdf_path = find_pdf_file(hazard_folder, company_choice, stage_choice)
+hazard_path = find_docx_file(hazard_folder, company_choice, stage_choice)
 
 try:
-  if hazard_pdf_path and os.path.exists(hazard_pdf_path):
-    with open(hazard_pdf_path, "rb") as f:
-      hazard_pdf_data = f.read()
+  if hazard_path and os.path.exists(hazard_path):
+    with open(hazard_path, "rb") as f:
+      hazard_docx_data = f.read()
   else:
     raise FileNotFoundError
 except FileNotFoundError:
-  hazard_pdf_data = b"PDF Template not found."
-  hazard_pdf_path = None
+  doc_temp = Document()
+  doc_temp.add_heading(hazard_version, level=1)
+  doc_temp.add_paragraph(
+      f"【系统提示】在 '{hazard_folder}' 文件夹中未找到匹配的 '.docx'"
+      " 文件，请确认已上传至 GitHub。"
+  )
+  temp_io = io.BytesIO()
+  doc_temp.save(temp_io)
+  hazard_docx_data = temp_io.getvalue()
+  hazard_path = None
 
 st.info(f"您当前查阅的是：【{hazard_version}】。")
-if hazard_pdf_path:
-  st.download_button(
-      label=f"📥 下载《{hazard_version}.pdf》",
-      data=hazard_pdf_data,
-      file_name=f"{hazard_version}.pdf",
-      mime="application/pdf",
-  )
-else:
-  st.error(
-      f"❌ 未在 '{hazard_folder}' 文件夹中找到对应的 PDF 文件，请确认已上传至"
-      " GitHub。"
-  )
-
+st.download_button(
+    label=f"📥 下载《{hazard_version}.docx》",
+    data=hazard_docx_data,
+    file_name=f"{hazard_version}.docx",
+    mime=(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
+)
 c_hazard = st.checkbox(
     f"【可选确认】本人已阅读并充分了解《{hazard_version}》的相关职业危害与防护要求，承诺在工作中严格落实。"
 )
 
-with st.expander("📚 附加查阅：全套《职业危害告知书》PDF 快捷下载专区"):
+with st.expander("📚 附加查阅：全套《职业危害告知书》Word 快捷下载专区"):
   st.write(
       "如需查阅或下载其他公司/阶段的职业危害告知书，可直接点击下方按钮："
   )
   if os.path.exists(hazard_folder):
     all_hazard_files = [
-        f for f in os.listdir(hazard_folder) if f.lower().endswith(".pdf")
+        f for f in os.listdir(hazard_folder) if f.lower().endswith(".docx")
     ]
     for hf in all_hazard_files:
       full_hf_path = os.path.join(hazard_folder, hf)
@@ -273,17 +267,17 @@ with st.expander("📚 附加查阅：全套《职业危害告知书》PDF 快�
             label=f"📥 下载：{hf}",
             data=fh.read(),
             file_name=hf,
-            key=f"dl_all_pdf_{hf}",
+            key=f"dl_all_docx_{hf}",
         )
   else:
-    st.write("暂无其他告知书 PDF 文件。")
+    st.write("暂无其他告知书 Word 文件。")
 
 st.write("---")
 
 # --- 项目二：员工转岗安全与职业健康培训记录表 ---
 st.subheader("🎓 项目二：员工转岗安全与职业健康培训记录表")
 training_folder = "员工转岗安全与职业健康培训记录表"
-training_path = find_training_file(training_folder)
+training_path = find_docx_file(training_folder, "转岗安全与职业健康培训记录表")
 
 try:
   if training_path and os.path.exists(training_path):
@@ -353,82 +347,69 @@ with col_date:
   )
 
 
-# ================= 6. 辅助函数：生成 PDF 签收确认凭证页（自动下载中文字体防乱码） =================
-def get_chinese_font():
-  font_path = "NotoSansSC-Regular.ttf"
-  if not os.path.exists(font_path):
-    try:
-      url = "https://github.com/google/fonts/raw/main/ofl/notosanssc/NotoSansSC-Regular.ttf"
-      urllib.request.urlretrieve(url, font_path)
-    except Exception:
-      pass
-  if os.path.exists(font_path):
-    try:
-      pdfmetrics.registerFont(TTFont("ChineseFont", font_path))
-      return "ChineseFont"
-    except Exception:
-      pass
-  return "Helvetica"
-
-
-def generate_pdf_receipt(
-    doc_title, employee_name, employee_id, sig_image_io, date_image_io
+# ================= 6. 辅助函数：向 Word 模板文末追加签名与日期 =================
+def append_signature_to_docx(
+    template_path, default_title, sig_image_io, date_image_io
 ):
-  pdf_buffer = io.BytesIO()
-  c = canvas.Canvas(pdf_buffer, pagesize=A4)
-  width, height = A4
+  if template_path and os.path.exists(template_path):
+    try:
+      doc = Document(template_path)
+    except Exception:
+      doc = Document()
+      doc.add_heading(default_title, level=1)
+      doc.add_paragraph("（提示：模板文件读取异常，此为生成的标准确认单）")
+  else:
+    doc = Document()
+    doc.add_heading(default_title, level=1)
+    doc.add_paragraph("（提示：未找到对应的 .docx 模板文件）")
 
-  font_name = get_chinese_font()
+  # 统一设置华文宋体
+  for p in doc.paragraphs:
+    for r in p.runs:
+      r.font.name = "华文宋体"
+      r.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-  # 标题
-  c.setFont(font_name, 16)
-  c.drawString(
-      50, height - 50, f"【合规签收确认凭证】 {doc_title}"
+  p_line = doc.add_paragraph("--------------------------------------------------")
+  p_line.paragraph_format.space_before = Pt(2)
+  p_line.paragraph_format.space_after = Pt(2)
+
+  p_confirm = doc.add_paragraph()
+  p_confirm.paragraph_format.space_before = Pt(0)
+  p_confirm.paragraph_format.space_after = Pt(2)
+  run_c = p_confirm.add_run(
+      f"【员工签收确认】 姓名：{emp_name} | 身份证号：{emp_id}\n"
+      f"本人已仔细阅读并充分理解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
   )
+  run_c.font.name = "华文宋体"
+  run_c.font.size = Pt(10.5)
+  run_c.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-  c.setFont(font_name, 11)
-  c.drawString(
-      50,
-      height - 80,
-      f"员工姓名: {employee_name}    身份证号: {employee_id}    签收时间:"
-      f" {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-  )
-  c.drawString(
-      50,
-      height - 100,
-      "本人已仔细阅读并充分理解上述告知内容，承诺在工作中严格落实各项安全防范及操作规程。",
-  )
+  # 使用表格将手写签名与手写日期并排显示在底部
+  table = doc.add_table(rows=1, cols=2)
+  table.autofit = False
 
-  c.setLineWidth(1)
-  c.line(50, height - 115, width - 50, height - 115)
+  cell_sig = table.cell(0, 0)
+  p1 = cell_sig.paragraphs[0]
+  r1 = p1.add_run("员工手写签名：\n")
+  r1.font.name = "华文宋体"
+  r1.font.size = Pt(10)
+  r1.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
+  p1.add_run().add_picture(sig_image_io, width=Inches(1.6))
+  sig_image_io.seek(0)
 
-  # 临时保存图像供 reportlab 读取
-  sig_path = "temp_sig.png"
-  with open(sig_path, "wb") as f:
-    f.write(sig_image_io.getvalue())
+  cell_date = table.cell(0, 1)
+  p2 = cell_date.paragraphs[0]
+  r2 = p2.add_run("手写日期：\n")
+  r2.font.name = "华文宋体"
+  r2.font.size = Pt(10)
+  r2.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
+  p2.add_run().add_picture(date_image_io, width=Inches(1.6))
+  date_image_io.seek(0)
 
-  date_path = "temp_date.png"
-  with open(date_path, "wb") as f:
-    f.write(date_image_io.getvalue())
-
-  # 绘制签名与日期图片标签
-  c.setFont(font_name, 11)
-  c.drawString(50, height - 150, "员工手写亲笔签名：")
-  c.drawImage(sig_path, 50, height - 320, width=180, preserveAspectRatio=True)
-
-  c.drawString(300, height - 150, "手写签署日期：")
-  c.drawImage(date_path, 300, height - 320, width=180, preserveAspectRatio=True)
-
-  c.save()
-  pdf_buffer.seek(0)
-
-  # 清理临时文件
-  if os.path.exists(sig_path):
-    os.remove(sig_path)
-  if os.path.exists(date_path):
-    os.remove(date_path)
-
-  return pdf_buffer
+  buffer = io.BytesIO()
+  doc.save(buffer)
+  buffer.seek(0)
+  return buffer
 
 
 # ================= 7. 提交校验与生成带签名的档案 =================
@@ -462,7 +443,7 @@ if st.button(
     st.warning("⚠️ 拦截：请在右侧手写日期栏内完成手写日期后再提交！")
   else:
     st.success(
-        "✅ 签收成功！系统已成功生成您的专属带签名合规档案。"
+        "✅ 签收成功！系统已成功生成您的专属带签名 Word 合规档案。"
     )
 
     signature_img = Image.fromarray(
@@ -479,98 +460,29 @@ if st.button(
     date_img.save(date_io, format="PNG")
     date_io.seek(0)
 
-
-    def append_signature_to_docx(template_path, default_title):
-      if template_path and os.path.exists(template_path):
-        try:
-          doc = Document(template_path)
-        except Exception:
-          doc = Document()
-          doc.add_heading(default_title, level=1)
-          doc.add_paragraph("（提示：模板文件读取异常，此为生成的标准确认单）")
-      else:
-        doc = Document()
-        doc.add_heading(default_title, level=1)
-        doc.add_paragraph("（提示：未找到对应的 .docx 模板文件）")
-
-      for p in doc.paragraphs:
-        for r in p.runs:
-          r.font.name = "华文宋体"
-          r.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
-
-      p_line = doc.add_paragraph(
-          "--------------------------------------------------"
-      )
-      p_line.paragraph_format.space_before = Pt(2)
-      p_line.paragraph_format.space_after = Pt(2)
-
-      p_confirm = doc.add_paragraph()
-      p_confirm.paragraph_format.space_before = Pt(0)
-      p_confirm.paragraph_format.space_after = Pt(2)
-      run_c = p_confirm.add_run(
-          f"【员工签收确认】 姓名：{emp_name} | 身份证号：{emp_id}\n"
-          f"本人已仔细阅读并充分理解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
-      )
-      run_c.font.name = "华文宋体"
-      run_c.font.size = Pt(10.5)
-      run_c.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
-
-      table = doc.add_table(rows=1, cols=2)
-      table.autofit = False
-
-      cell_sig = table.cell(0, 0)
-      p1 = cell_sig.paragraphs[0]
-      r1 = p1.add_run("员工手写签名：\n")
-      r1.font.name = "华文宋体"
-      r1.font.size = Pt(10)
-      r1.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
-      p1.add_run().add_picture(sig_io, width=Inches(1.6))
-      sig_io.seek(0)
-
-      cell_date = table.cell(0, 1)
-      p2 = cell_date.paragraphs[0]
-      r2 = p2.add_run("手写日期：\n")
-      r2.font.name = "华文宋体"
-      r2.font.size = Pt(10)
-      r2.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
-      p2.add_run().add_picture(date_io, width=Inches(1.6))
-      date_io.seek(0)
-
-      buffer = io.BytesIO()
-      doc.save(buffer)
-      buffer.seek(0)
-      return buffer
-
-
     # 动态生成用户勾选的文件并打包
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-      if c_hazard and hazard_pdf_path and os.path.exists(hazard_pdf_path):
-        with open(hazard_pdf_path, "rb") as fpdf:
-          pdf_bytes = fpdf.read()
-
-        # 1. 放入原PDF告知书
+      if c_hazard and hazard_path and os.path.exists(hazard_path):
+        signed_hazard_buffer = append_signature_to_docx(
+            hazard_path, f"{hazard_version} 签收单", sig_io, date_io
+        )
         hazard_filename_cloud = (
-            f"{hazard_version}_{emp_name}_{emp_id[-4:]}.pdf"
+            f"{hazard_version}_{emp_name}_{emp_id[-4:]}_已签字.docx"
         )
-        zip_file.writestr(hazard_filename_cloud, pdf_bytes)
+        zip_file.writestr(
+            hazard_filename_cloud, signed_hazard_buffer.getvalue()
+        )
         upload_to_baidu_netdisk_with_auto_refresh(
-            pdf_bytes, hazard_filename_cloud
-        )
-
-        # 2. 同时生成并放入专属的 PDF 签收确认凭证
-        receipt_pdf_buffer = generate_pdf_receipt(
-            hazard_version, emp_name, emp_id, sig_io, date_io
-        )
-        receipt_filename = f"{hazard_version}_{emp_name}_签收确认凭证.pdf"
-        zip_file.writestr(receipt_filename, receipt_pdf_buffer.getvalue())
-        upload_to_baidu_netdisk_with_auto_refresh(
-            receipt_pdf_buffer.getvalue(), receipt_filename
+            signed_hazard_buffer.getvalue(), hazard_filename_cloud
         )
 
       if c_training and training_path:
         signed_training_buffer = append_signature_to_docx(
-            training_path, "员工转岗安全与职业健康培训记录表 签收单"
+            training_path,
+            "员工转岗安全与职业健康培训记录表 签收单",
+            sig_io,
+            date_io,
         )
         training_filename_cloud = (
             f"员工转岗培训记录表_{emp_name}_{emp_id[-4:]}_已签字.docx"
@@ -597,17 +509,19 @@ if st.button(
 
     st.markdown("---")
     st.success(
-        "🎉 您的专属带签名合规档案已打包完毕，点击下方按钮即可下载！"
+        "🎉 您的专属带签名 Word 合规档案已打包完毕，点击下方按钮即可下载！"
     )
 
     col_d1, col_d2 = st.columns(2)
-    if c_hazard and hazard_pdf_path and os.path.exists(hazard_pdf_path):
+    if c_hazard and hazard_path and os.path.exists(hazard_path):
       with col_d1:
         st.download_button(
-            label="📄 下载带签名的告知书凭证 (.pdf)",
-            data=receipt_pdf_buffer.getvalue(),
-            file_name=f"{hazard_version}_{emp_name}_签收确认凭证.pdf",
-            mime="application/pdf",
+            label="📄 下载带签名的告知书 (.docx)",
+            data=signed_hazard_buffer.getvalue(),
+            file_name=f"{hazard_version}_{emp_name}_已签字.docx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
         )
     if c_training and training_path:
       with col_d2:
