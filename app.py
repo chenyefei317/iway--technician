@@ -49,37 +49,56 @@ def find_docx_file(folder, keyword1, keyword2):
   return None
 
 
-# ================= 2. 百度网盘自动上传函数 =================
-def upload_to_baidu_netdisk(file_bytes, remote_filename):
-  """通过百度网盘开放平台 API 自动上传文件到云端网盘
-
-  需要在百度网盘开放平台申请应用获取 Access Token，
-  并可将 Token 存放在 Streamlit 的 st.secrets 中。
-  """
+# ================= 2. 百度网盘自动上传函数（带 OAuth2 自动刷新） =================
+def refresh_baidu_access_token():
   try:
-    # 优先从 Streamlit Secrets 获取 Token，若未配置则跳过并提示
-    access_token = st.secrets.get("BAIDU_ACCESS_TOKEN", "")
-    if not access_token:
-      return (
-          False,
-          "未配置百度网盘 Access Token（可在后台 Secrets 中设置），文件已成功生成并保存在本地/ZIP下载中。",
-      )
+    client_id = st.secrets.get("BAIDU_CLIENT_ID", "")
+    client_secret = st.secrets.get("BAIDU_CLIENT_SECRET", "")
+    refresh_token = st.secrets.get("BAIDU_REFRESH_TOKEN", "")
+    if not client_id or not client_secret or not refresh_token:
+      return None
+    token_url = "https://pan.baidu.com/oauth/2.0/token"
+    params = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }
+    response = requests.get(token_url, params=params)
+    res_data = response.json()
+    return res_data.get("access_token")
+  except Exception:
+    return None
 
-    # 百度网盘上传接口地址（目标路径设定在 /apps/慧瑞EHS合规档案/ 目录下）
-    target_path = f"/apps/慧瑞EHS合规档案/{remote_filename}"
-    upload_url = f"https://pan.baidu.com/rest/2.0/xpan/file?method=upload&access_token={access_token}&path={target_path}&uploadid=&file=1"
 
+def upload_to_baidu_netdisk_with_auto_refresh(file_bytes, remote_filename):
+  access_token = st.secrets.get("BAIDU_ACCESS_TOKEN", "")
+  if not access_token:
+    return (
+        False,
+        "未配置网盘凭证，文件已在本地生成并可通过网页下载/ZIP打包保存。",
+    )
+
+  sub_folder = "EHS签字档案"
+  target_path = f"/apps/慧瑞EHS合规档案/{sub_folder}/{remote_filename}"
+
+  def send_upload_request(token):
+    upload_url = f"https://pan.baidu.com/rest/2.0/xpan/file?method=upload&access_token={token}&path={target_path}&uploadid=&file=1"
     files = {"file": (remote_filename, file_bytes)}
-    response = requests.post(upload_url, files=files)
-    result = response.json()
+    return requests.post(upload_url, files=files).json()
 
-    if "errno" in result and result["errno"] == 0:
-      return True, f"成功自动同步至百度网盘目录：{target_path}"
+  result = send_upload_request(access_token)
+  if "errno" in result and result["errno"] in [110, 111]:
+    new_token = refresh_baidu_access_token()
+    if new_token:
+      result = send_upload_request(new_token)
     else:
-      err_msg = result.get("error_msg", "未知错误")
-      return False, f"百度网盘上传失败: {err_msg}"
-  except Exception as e:
-    return False, f"上传云盘异常: {str(e)}"
+      return False, "Token 已过期且自动刷新失败。"
+
+  if "errno" in result and result["errno"] == 0:
+    return True, f"成功同步至网盘：/apps/慧瑞EHS合规档案/{sub_folder}/"
+  else:
+    return False, f"网盘上传失败: {result.get('error_msg', '未知错误')}"
 
 
 # ================= 3. 侧边栏：Logo、微信分享与模板下载 =================
@@ -96,11 +115,7 @@ with st.sidebar:
   st.write("已自动关联您的云端网址，二维码将实时更新供手机扫码填报。")
 
   app_url = st.text_input(
-      "应用公网链接 (URL):",
-      value="https://iway--technician.streamlit.app",
-      help=(
-          "请在此处粘贴部署到 Streamlit Cloud 后的真实网址，二维码会随之改变"
-      ),
+      "应用公网链接 (URL):", value="https://iway--technician.streamlit.app"
   )
 
   if app_url:
@@ -145,7 +160,7 @@ with st.sidebar:
   if side_hazard_path and os.path.exists(side_hazard_path):
     with open(side_hazard_path, "rb") as fsh:
       st.download_button(
-          label=f"📥 下载选中的告知书",
+          label="📥 下载选中的告知书",
           data=fsh.read(),
           file_name=f"职业危害告知书 - {side_company}（{side_stage}）.docx",
           key="side_dl_hazard_btn",
@@ -153,15 +168,15 @@ with st.sidebar:
   else:
     st.warning("⚠️ 暂未找到该模板")
 
-# ================= 4. 主界面逻辑（Logo 变大并在标题左侧） =================
-col_logo, col_title = st.columns([1, 5])
+# ================= 4. 主界面逻辑（Logo在左侧，尺寸加大，主标题单独一行） =================
+col_logo, col_title = st.columns([1, 4])
 with col_logo:
   try:
-    st.image("logo.png", width=110)  # 调大 Logo 宽度至 110px
+    st.image("logo.png", width=140)  # Logo 变大
   except Exception:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/800px-Ikea_logo.svg.png",
-        width=110,
+        width=140,
     )
 with col_title:
   st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
@@ -184,8 +199,8 @@ with col2:
 st.write("---")
 st.markdown("### 📂 待签收项目清单")
 
-# --- 项目一：职业危害告知书（精准匹配 .docx 模板） ---
-st.subheader("⚠️ 项目一：职业危害告知书")
+# --- 项目一：职业危害告知书（非必选项） ---
+st.subheader("⚠️ 项目一：职业危害告知书 (可选)")
 
 col_c, col_s = st.columns(2)
 with col_c:
@@ -198,7 +213,6 @@ with col_s:
 
 hazard_version = f"职业危害告知书 - {company_choice}（{stage_choice}）"
 hazard_folder = "职业危害告知书"
-
 hazard_path = find_docx_file(hazard_folder, company_choice, stage_choice)
 
 try:
@@ -229,10 +243,9 @@ st.download_button(
     ),
 )
 c_hazard = st.checkbox(
-    f"【须确认】本人已阅读并充分了解《{hazard_version}》的相关职业危害与防护要求，承诺在工作中严格落实。"
+    f"【可选确认】本人已阅读并充分了解《{hazard_version}》的相关职业危害与防护要求，承诺在工作中严格落实。"
 )
 
-# 附加查阅：全套《职业危害告知书》模板快捷下载折叠区
 with st.expander("📚 附加查阅：全套《职业危害告知书》模板快捷下载专区"):
   st.write(
       "如需查阅或下载其他公司/阶段的职业危害告知书，可直接点击下方按钮："
@@ -304,24 +317,36 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# 手写签名板块
+# ================= 5. 手写签名与手写日期栏（并排布局，日期必填） =================
 st.write("---")
-st.subheader("✍️ 3. 员工手写签名与提交")
-st.markdown("**请在下方手写板内签名：**")
-canvas_result = st_canvas(
-    stroke_width=4,
-    stroke_color="#000000",
-    background_color="#F8F9FA",
-    height=260,
-    width=650,
-    drawing_mode="freedraw",
-    key="canvas",
-    return_image_data=True,
+st.subheader("✍️ 3. 员工手写签名与签收日期")
+st.markdown(
+    "**请在左侧手写板内签名，并在右侧填写签收日期（两项均为必填）：**"
 )
 
-sign_date = st.date_input("签收日期：", datetime.date.today())
+col_sig, col_date = st.columns([3, 2])
+with col_sig:
+  st.markdown("**手写签名区：**")
+  canvas_result = st_canvas(
+      stroke_width=4,
+      stroke_color="#000000",
+      background_color="#F8F9FA",
+      height=220,
+      width=400,
+      drawing_mode="freedraw",
+      key="canvas",
+      return_image_data=True,
+  )
+with col_date:
+  st.markdown("**手写日期栏：**")
+  sig_date_str = st.text_input(
+      "请输入签署日期 (如 2026-06-06)：",
+      value="",
+      help="必须填写签署日期方可提交",
+  )
+  st.info("提示：请核对日期准确后提交。")
 
-# ================= 5. 提交校验与生成带签名的 Word 档案 =================
+# ================= 6. 提交校验与生成带签名的 Word 归档 =================
 if st.button(
     "📁 确认无误，一键签收并生成带签名的 Word 档案", use_container_width=True
 ):
@@ -330,7 +355,6 @@ if st.button(
       and len(canvas_result.json_data.get("objects", [])) == 0
   )
 
-  # 身份证 18 位强制校验正则
   id_pattern = re.compile(r"^\d{17}[\dXx]$")
 
   if not emp_name.strip() or not emp_id.strip():
@@ -339,20 +363,19 @@ if st.button(
     st.error(
         "❌ 拦截：身份证号必须为严格的 **18 位**数字（末尾可为大写 X）！"
     )
-  elif not c_hazard:
-    st.error("❌ 拦截：您必须勾选确认已阅读《职业危害告知书》！")
-  elif not c_training:
+  elif not c_hazard and not c_training:
     st.error(
-        "❌ 拦截：您必须勾选确认已完成《员工转岗安全与职业健康培训记录表》！"
+        "❌ 拦截：请至少勾选并完成一项签收（职业危害告知书或转岗培训记录表）！"
     )
   elif is_canvas_empty:
     st.warning("⚠️ 拦截：请在上方画板完成手写签名后再提交。")
+  elif not sig_date_str.strip():
+    st.warning("⚠️ 拦截：请在右侧填写手写日期栏后再提交！")
   else:
     st.success(
-        "✅ 签收成功！系统已成功加载 Word 模板并在文末追加了您的手写签名。"
+        "✅ 签收成功！系统已成功加载模板并在文末追加了您的手写签名与日期。"
     )
 
-    # 提取手写签名图片
     signature_img = Image.fromarray(
         canvas_result.image_data.astype("uint8"), "RGBA"
     )
@@ -361,7 +384,6 @@ if st.button(
     sig_io.seek(0)
 
 
-    # 安全加载模板并追加签名的核心函数（紧凑排版，确保同一页显示，强制华文宋体）
     def append_signature_to_docx(template_path, default_title):
       if template_path and os.path.exists(template_path):
         try:
@@ -375,13 +397,11 @@ if st.button(
         doc.add_heading(default_title, level=1)
         doc.add_paragraph("（提示：未找到对应的 .docx 模板文件）")
 
-      # 统一设置华文宋体
       for p in doc.paragraphs:
         for r in p.runs:
           r.font.name = "华文宋体"
           r.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      # 紧凑排版：减小上下边距，确保和正文留在同一页
       p_line = doc.add_paragraph(
           "--------------------------------------------------"
       )
@@ -392,8 +412,8 @@ if st.button(
       p_confirm.paragraph_format.space_before = Pt(0)
       p_confirm.paragraph_format.space_after = Pt(2)
       run_c = p_confirm.add_run(
-          f"【员工签收确认】 姓名：{emp_name} | 身份证号：{emp_id} | 日期：{sign_date}\n"
-          f"本人已仔细阅读并充分理解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
+          f"【员工签收确认】 姓名：{emp_name} | 身份证号：{emp_id} | 签收日期："
+          f"{sig_date_str.strip()}\n本人已仔细阅读并充分了解上述内容，承诺在工作中严格遵守各项安全防范及操作规程。"
       )
       run_c.font.name = "华文宋体"
       run_c.font.size = Pt(10.5)
@@ -415,47 +435,45 @@ if st.button(
       buffer.seek(0)
       return buffer
 
-
-    signed_hazard_buffer = append_signature_to_docx(
-        hazard_path, f"{hazard_version} 签收单"
-    )
-    signed_training_buffer = append_signature_to_docx(
-        training_path, "员工转岗安全与职业健康培训记录表 签收单"
-    )
-
-    # 尝试自动同步到百度网盘
-    hazard_filename_cloud = f"{hazard_version}_{emp_name}_{emp_id[-4:]}_已签字.docx"
-    training_filename_cloud = (
-        f"员工转岗培训记录表_{emp_name}_{emp_id[-4:]}_已签字.docx"
-    )
-
-    success_h, msg_h = upload_to_baidu_netdisk(
-        signed_hazard_buffer.getvalue(), hazard_filename_cloud
-    )
-    success_t, msg_t = upload_to_baidu_netdisk(
-        signed_training_buffer.getvalue(), training_filename_cloud
-    )
-
-    if success_h or success_t:
-      st.info(f"☁️ 云盘同步状态：\n- {msg_h}\n- {msg_t}")
-    else:
-      st.warning(f"☁️ 云盘同步提示：{msg_h}")
-
-    # ZIP 打包下载流
+    # 动态生成用户勾选的文件
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-      zip_file.writestr(
-          f"{hazard_version}_{emp_name}_已签字.docx",
-          signed_hazard_buffer.getvalue(),
-      )
-      zip_file.writestr(
-          f"员工转岗安全与职业健康培训记录表_{emp_name}_已签字.docx",
-          signed_training_buffer.getvalue(),
-      )
+      # 勾选了危害告知书时生成
+      if c_hazard:
+        signed_hazard_buffer = append_signature_to_docx(
+            hazard_path, f"{hazard_version} 签收单"
+        )
+        hazard_filename_cloud = (
+            f"{hazard_version}_{emp_name}_{emp_id[-4:]}_已签字.docx"
+        )
+        zip_file.writestr(
+            hazard_filename_cloud, signed_hazard_buffer.getvalue()
+        )
+        upload_to_baidu_netdisk_with_auto_refresh(
+            signed_hazard_buffer.getvalue(), hazard_filename_cloud
+        )
+
+      # 勾选了培训记录表时生成
+      if c_training:
+        signed_training_buffer = append_signature_to_docx(
+            training_path, "员工转岗安全与职业健康培训记录表 签收单"
+        )
+        training_filename_cloud = (
+            f"员工转岗培训记录表_{emp_name}_{emp_id[-4:]}_已签字.docx"
+        )
+        zip_file.writestr(
+            training_filename_cloud, signed_training_buffer.getvalue()
+        )
+        upload_to_baidu_netdisk_with_auto_refresh(
+            signed_training_buffer.getvalue(), training_filename_cloud
+        )
+
+      # 保存手写签名原图
       img_byte_arr = io.BytesIO()
       signature_img.save(img_byte_arr, format="PNG")
       zip_file.writestr(
-          f"手写签名原图_{emp_name}_{sign_date}.png", img_byte_arr.getvalue()
+          f"手写签名原图_{emp_name}_{sig_date_str.strip()}.png",
+          img_byte_arr.getvalue(),
       )
 
     zip_buffer.seek(0)
@@ -465,36 +483,40 @@ if st.button(
         "🎉 您的专属带签名 Word 合规档案已打包完毕，点击下方按钮即可下载！"
     )
 
-    col_d1, col_d2, col_d3 = st.columns(3)
-    with col_d1:
-      st.download_button(
-          label="📄 下载带签名的告知书 (.docx)",
-          data=signed_hazard_buffer,
-          file_name=f"{hazard_version}_{emp_name}_已签字.docx",
-          mime=(
-              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ),
-      )
-    with col_d2:
-      st.download_button(
-          label="📄 下载带签名的培训表 (.docx)",
-          data=signed_training_buffer,
-          file_name=f"员工转岗培训记录表_{emp_name}_已签字.docx",
-          mime=(
-              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ),
-      )
-    with col_d3:
-      st.download_button(
-          label="📥 一键打包下载全部 (.ZIP)",
-          data=zip_buffer,
-          file_name=f"安全合规档案_{emp_name}_{sign_date}.zip",
-          mime="application/zip",
-      )
+    col_d1, col_d2 = st.columns(2)
+    if c_hazard:
+      with col_d1:
+        st.download_button(
+            label="📄 下载带签名的告知书 (.docx)",
+            data=signed_hazard_buffer.getvalue(),
+            file_name=f"{hazard_version}_{emp_name}_已签字.docx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+        )
+    if c_training:
+      with col_d2:
+        st.download_button(
+            label="📄 下载带签名的培训表 (.docx)",
+            data=signed_training_buffer.getvalue(),
+            file_name=f"员工转岗培训记录表_{emp_name}_已签字.docx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+        )
+
+    st.markdown("---")
+    st.download_button(
+        label="📥 一键打包下载全部签收档案 (.ZIP)",
+        data=zip_buffer,
+        file_name=f"安全合规档案_{emp_name}_{sig_date_str.strip()}.zip",
+        mime="application/zip",
+        use_container_width=True,
+    )
 
     st.balloons()
 
-# ================= 6. 底部版权与开发者声明 =================
+# ================= 7. 底部版权与开发者声明 =================
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray; font-size: 14px;'>"
