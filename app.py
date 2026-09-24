@@ -2,6 +2,7 @@ import datetime
 import io
 import os
 import re
+import urllib.request
 import zipfile
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -352,7 +353,24 @@ with col_date:
   )
 
 
-# ================= 6. 辅助函数：生成 PDF 签收确认凭证页（支持中文宋体） =================
+# ================= 6. 辅助函数：生成 PDF 签收确认凭证页（自动下载中文字体防乱码） =================
+def get_chinese_font():
+  font_path = "NotoSansSC-Regular.ttf"
+  if not os.path.exists(font_path):
+    try:
+      url = "https://github.com/google/fonts/raw/main/ofl/notosanssc/NotoSansSC-Regular.ttf"
+      urllib.request.urlretrieve(url, font_path)
+    except Exception:
+      pass
+  if os.path.exists(font_path):
+    try:
+      pdfmetrics.registerFont(TTFont("ChineseFont", font_path))
+      return "ChineseFont"
+    except Exception:
+      pass
+  return "Helvetica"
+
+
 def generate_pdf_receipt(
     doc_title, employee_name, employee_id, sig_image_io, date_image_io
 ):
@@ -360,19 +378,10 @@ def generate_pdf_receipt(
   c = canvas.Canvas(pdf_buffer, pagesize=A4)
   width, height = A4
 
-  # 自动注册并加载中文字体（需在根目录放置 simsun.ttc 或 simsun.ttf）
-  font_name = "Helvetica"
-  for font_file in ["simsun.ttf", "simsun.ttc"]:
-    if os.path.exists(font_file):
-      try:
-        pdfmetrics.registerFont(TTFont("SimSun", font_file))
-        font_name = "SimSun"
-        break
-      except Exception:
-        pass
+  font_name = get_chinese_font()
 
   # 标题
-  c.setFont(f"{font_name}-Bold" if font_name == "SimSun" else font_name, 16)
+  c.setFont(font_name, 16)
   c.drawString(
       50, height - 50, f"【合规签收确认凭证】 {doc_title}"
   )
