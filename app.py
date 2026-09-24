@@ -10,6 +10,8 @@ from docx.shared import Inches, RGBColor, Pt
 import pandas as pd
 import qrcode
 from PIL import Image
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 import requests
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
@@ -144,7 +146,6 @@ with st.sidebar:
   st.markdown("---")
   st.markdown("### 📥 常用制度模板快捷下载")
 
-  # 培训记录表下载
   training_folder_dl = "员工转岗安全与职业健康培训记录表"
   training_path_dl = find_training_file(training_folder_dl)
   if training_path_dl and os.path.exists(training_path_dl):
@@ -155,7 +156,6 @@ with st.sidebar:
           file_name="员工转岗安全与职业健康培训记录表.docx",
       )
 
-  # 侧边栏职业危害告知书 PDF 下载
   st.write("**职业危害告知书 PDF 下载：**")
   side_company = st.selectbox(
       "选择公司：",
@@ -194,7 +194,7 @@ with col_title:
   st.markdown("## 员工职业危害告知书和转岗培训记录表签收平台")
 
 st.markdown(
-    "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收与手写日期。系统将自动把您的亲笔签名嵌入对应的 Word 正式档案中。"
+    "请仔细阅读下方各项内容，勾选确认并在底部完成手写签收与手写日期。系统将自动生成包含您亲笔签名与手写日期的正式合规档案。"
 )
 
 # 基础信息录入
@@ -313,7 +313,7 @@ c_training = st.checkbox(
     "【须确认】本人已完成《员工转岗安全与职业健康培训记录表》所含全部课程的学习，熟知岗位危险源与操作规程。"
 )
 
-# ================= 5. 手写签名与手写日期栏（并排双画布，均为必填，动态显示当前日期） =================
+# ================= 5. 手写签名与手写日期栏（并排双画布，动态关联当前系统日期） =================
 current_date_str = datetime.date.today().strftime("%Y年%m月%d日")
 
 st.write("---")
@@ -349,9 +349,66 @@ with col_date:
       return_image_data=True,
   )
 
-# ================= 6. 提交校验与生成带签名的 Word 档案 =================
+
+# ================= 6. 辅助函数：生成 PDF 签收确认凭证页 =================
+def generate_pdf_receipt(
+    doc_title, employee_name, employee_id, sig_image_io, date_image_io
+):
+  pdf_buffer = io.BytesIO()
+  c = canvas.Canvas(pdf_buffer, pagesize=A4)
+  width, height = A4
+
+  # 标题
+  c.setFont("Helvetica-Bold", 16)
+  c.drawString(50, height - 50, f"【合规签收确认凭证】 {doc_title}")
+
+  c.setFont("Helvetica", 11)
+  c.drawString(
+      50,
+      height - 80,
+      f"员工姓名: {employee_name}    身份证号: {employee_id}    签收时间:"
+      f" {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+  )
+  c.drawString(
+      50,
+      height - 100,
+      "本人已仔细阅读并充分理解上述告知内容，承诺在工作中严格落实各项安全防范及操作规程。",
+  )
+
+  c.setLineWidth(1)
+  c.line(50, height - 115, width - 50, height - 115)
+
+  # 临时保存图像供 reportlab 读取
+  sig_path = "temp_sig.png"
+  with open(sig_path, "wb") as f:
+    f.write(sig_image_io.getvalue())
+
+  date_path = "temp_date.png"
+  with open(date_path, "wb") as f:
+    f.write(date_image_io.getvalue())
+
+  # 绘制签名与日期图片
+  c.drawString(50, height - 150, "员工手写亲笔签名：")
+  c.drawImage(sig_path, 50, height - 320, width=180, preserveAspectRatio=True)
+
+  c.drawString(300, height - 150, "手写签署日期：")
+  c.drawImage(date_path, 300, height - 320, width=180, preserveAspectRatio=True)
+
+  c.save()
+  pdf_buffer.seek(0)
+
+  # 清理临时文件
+  if os.path.exists(sig_path):
+    os.remove(sig_path)
+  if os.path.exists(date_path):
+    os.remove(date_path)
+
+  return pdf_buffer
+
+
+# ================= 7. 提交校验与生成带签名的档案 =================
 if st.button(
-    "📁 确认无误，一键签收并生成带签名的 Word 档案", use_container_width=True
+    "📁 确认无误，一键签收并生成带签名的合规档案", use_container_width=True
 ):
   is_canvas_empty = canvas_result.image_data is None or (
       canvas_result.json_data is not None
@@ -379,9 +436,7 @@ if st.button(
   elif is_date_empty:
     st.warning("⚠️ 拦截：请在右侧手写日期栏内完成手写日期后再提交！")
   else:
-    st.success(
-        "✅ 签收成功！系统已成功加载模板并在文末追加了您的手写签名与日期。"
-    )
+    st.success("✅ 签收成功！系统已成功生成您的专属带签名合规档案。")
 
     signature_img = Image.fromarray(
         canvas_result.image_data.astype("uint8"), "RGBA"
@@ -433,7 +488,6 @@ if st.button(
       run_c.font.size = Pt(10.5)
       run_c.font.element.rPr.rFonts.set(qn("w:eastAsia"), "华文宋体")
 
-      # 用 Word 表格将手写签名与手写日期并排在同一页底部
       table = doc.add_table(rows=1, cols=2)
       table.autofit = False
 
@@ -460,18 +514,31 @@ if st.button(
       buffer.seek(0)
       return buffer
 
+
     # 动态生成用户勾选的文件并打包
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
       if c_hazard and hazard_pdf_path and os.path.exists(hazard_pdf_path):
         with open(hazard_pdf_path, "rb") as fpdf:
           pdf_bytes = fpdf.read()
+
+        # 1. 放入原PDF告知书
         hazard_filename_cloud = (
             f"{hazard_version}_{emp_name}_{emp_id[-4:]}.pdf"
         )
         zip_file.writestr(hazard_filename_cloud, pdf_bytes)
         upload_to_baidu_netdisk_with_auto_refresh(
             pdf_bytes, hazard_filename_cloud
+        )
+
+        # 2. 同时生成并放入专属的 PDF 签收确认凭证
+        receipt_pdf_buffer = generate_pdf_receipt(
+            hazard_version, emp_name, emp_id, sig_io, date_io
+        )
+        receipt_filename = f"{hazard_version}_{emp_name}_签收确认凭证.pdf"
+        zip_file.writestr(receipt_filename, receipt_pdf_buffer.getvalue())
+        upload_to_baidu_netdisk_with_auto_refresh(
+            receipt_pdf_buffer.getvalue(), receipt_filename
         )
 
       if c_training and training_path:
@@ -488,7 +555,7 @@ if st.button(
             signed_training_buffer.getvalue(), training_filename_cloud
         )
 
-      # 保存手写签名及手写日期原图
+      # 保存签名及日期原图
       img_byte_arr = io.BytesIO()
       signature_img.save(img_byte_arr, format="PNG")
       zip_file.writestr(
@@ -510,9 +577,9 @@ if st.button(
     if c_hazard and hazard_pdf_path and os.path.exists(hazard_pdf_path):
       with col_d1:
         st.download_button(
-            label="📄 下载选中的告知书 (.pdf)",
-            data=hazard_pdf_data,
-            file_name=f"{hazard_version}.pdf",
+            label="📄 下载带签名的告知书凭证 (.pdf)",
+            data=receipt_pdf_buffer.getvalue(),
+            file_name=f"{hazard_version}_{emp_name}_签收确认凭证.pdf",
             mime="application/pdf",
         )
     if c_training and training_path:
@@ -537,7 +604,7 @@ if st.button(
 
     st.balloons()
 
-# ================= 7. 底部版权与开发者声明 =================
+# ================= 8. 底部版权与开发者声明 =================
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray; font-size: 14px;'>"
