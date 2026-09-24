@@ -11,6 +11,8 @@ import pandas as pd
 import qrcode
 from PIL import Image
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 import requests
 import streamlit as st
@@ -350,7 +352,7 @@ with col_date:
   )
 
 
-# ================= 6. 辅助函数：生成 PDF 签收确认凭证页 =================
+# ================= 6. 辅助函数：生成 PDF 签收确认凭证页（支持中文宋体） =================
 def generate_pdf_receipt(
     doc_title, employee_name, employee_id, sig_image_io, date_image_io
 ):
@@ -358,11 +360,24 @@ def generate_pdf_receipt(
   c = canvas.Canvas(pdf_buffer, pagesize=A4)
   width, height = A4
 
-  # 标题
-  c.setFont("Helvetica-Bold", 16)
-  c.drawString(50, height - 50, f"【合规签收确认凭证】 {doc_title}")
+  # 自动注册并加载中文字体（需在根目录放置 simsun.ttc 或 simsun.ttf）
+  font_name = "Helvetica"
+  for font_file in ["simsun.ttf", "simsun.ttc"]:
+    if os.path.exists(font_file):
+      try:
+        pdfmetrics.registerFont(TTFont("SimSun", font_file))
+        font_name = "SimSun"
+        break
+      except Exception:
+        pass
 
-  c.setFont("Helvetica", 11)
+  # 标题
+  c.setFont(f"{font_name}-Bold" if font_name == "SimSun" else font_name, 16)
+  c.drawString(
+      50, height - 50, f"【合规签收确认凭证】 {doc_title}"
+  )
+
+  c.setFont(font_name, 11)
   c.drawString(
       50,
       height - 80,
@@ -387,7 +402,8 @@ def generate_pdf_receipt(
   with open(date_path, "wb") as f:
     f.write(date_image_io.getvalue())
 
-  # 绘制签名与日期图片
+  # 绘制签名与日期图片标签
+  c.setFont(font_name, 11)
   c.drawString(50, height - 150, "员工手写亲笔签名：")
   c.drawImage(sig_path, 50, height - 320, width=180, preserveAspectRatio=True)
 
@@ -436,7 +452,9 @@ if st.button(
   elif is_date_empty:
     st.warning("⚠️ 拦截：请在右侧手写日期栏内完成手写日期后再提交！")
   else:
-    st.success("✅ 签收成功！系统已成功生成您的专属带签名合规档案。")
+    st.success(
+        "✅ 签收成功！系统已成功生成您的专属带签名合规档案。"
+    )
 
     signature_img = Image.fromarray(
         canvas_result.image_data.astype("uint8"), "RGBA"
